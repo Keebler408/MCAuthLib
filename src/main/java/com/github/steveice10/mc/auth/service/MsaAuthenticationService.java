@@ -39,6 +39,7 @@ public class MsaAuthenticationService extends AuthenticationService {
     private String deviceCode;
     private String clientId;
 
+    @SuppressWarnings("unused")
     public MsaAuthenticationService(String clientId) {
         this(clientId, null);
     }
@@ -58,7 +59,6 @@ public class MsaAuthenticationService extends AuthenticationService {
      * Generate a single use code for Microsoft authentication
      *
      * @return The code along with other returned data
-     * @throws RequestException
      */
     public MsCodeResponse getAuthCode() throws RequestException {
         if(this.clientId == null) {
@@ -75,7 +75,6 @@ public class MsaAuthenticationService extends AuthenticationService {
      * generated device code from {@link #getAuthCode()}
      *
      * @return The final Minecraft authentication data
-     * @throws RequestException
      */
     private McLoginResponse getLoginResponseFromCode() throws RequestException {
         if(this.deviceCode == null) {
@@ -87,12 +86,10 @@ public class MsaAuthenticationService extends AuthenticationService {
         return getLoginResponseFromToken("d=" + response.access_token);
     }
 
-    private McLoginResponse getLoginResponseFromCreds(String username, String password) throws RequestException {
+    private McLoginResponse getLoginResponseFromCreds() throws RequestException {
         // TODO: Migrate alot of this to {@link HTTP}
 
-        String cookie = "";
-        String PPFT = "";
-        String urlPost = "";
+        String cookie, PPFT, urlPost;
 
         try {
             HttpURLConnection connection = HTTP.createUrlConnection(this.getProxy(), MS_LOGIN_ENDPOINT);
@@ -172,7 +169,7 @@ public class MsaAuthenticationService extends AuthenticationService {
     private String inputStreamToString(InputStream inputStream) throws IOException {
         StringBuilder textBuilder = new StringBuilder();
         try (Reader reader = new BufferedReader(new InputStreamReader(inputStream, Charset.forName(StandardCharsets.UTF_8.name())))) {
-            int c = 0;
+            int c;
             while ((c = reader.read()) != -1) {
                 textBuilder.append((char) c);
             }
@@ -213,8 +210,6 @@ public class MsaAuthenticationService extends AuthenticationService {
 
     /**
      * Fetch the profile for the current account
-     *
-     * @throws RequestException
      */
     private void getProfile() throws RequestException {
         Map<String, String> headers = new HashMap<>();
@@ -240,7 +235,7 @@ public class MsaAuthenticationService extends AuthenticationService {
         }
         McLoginResponse response = null;
         if(password) {
-            response = getLoginResponseFromCreds(this.username, this.password);
+            response = getLoginResponseFromCreds();
         } else if(!device) {
             this.deviceCode = getAuthCode().device_code;
         }
