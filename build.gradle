@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'com.github.steveice10'
-version '1.5-tycrek-4'
+version '1.5-tycrek-10'
 
 repositories {
     mavenCentral()
