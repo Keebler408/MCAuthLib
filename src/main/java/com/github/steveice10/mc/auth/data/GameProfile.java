@@ -31,7 +31,7 @@ public class GameProfile {
     private static final Gson GSON;
 
     static {
-        try (@Cleanup var in = SessionService.class.getResourceAsStream("/yggdrasil_session_pubkey.der")) {
+        try (var in = SessionService.class.getResourceAsStream("/yggdrasil_session_pubkey.der")) {
             @Cleanup var out = new ByteArrayOutputStream();
 
             var buffer = new byte[4096];

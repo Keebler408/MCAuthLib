@@ -88,7 +88,7 @@ public class MsaAuthenticationService extends AuthenticationService {
             var connection = HTTP.createUrlConnection(this.getProxy(), MS_LOGIN_ENDPOINT);
             connection.setDoInput(true);
 
-            try (@Cleanup var in = connection.getResponseCode() == 200 ? connection.getInputStream() : connection.getErrorStream()) {
+            try (var in = connection.getResponseCode() == 200 ? connection.getInputStream() : connection.getErrorStream()) {
                 cookie = connection.getHeaderField("set-cookie");
 
                 var body = inputStreamToString(in);
@@ -125,7 +125,7 @@ public class MsaAuthenticationService extends AuthenticationService {
             connection.setDoInput(true);
             connection.setDoOutput(true);
 
-            try (@Cleanup OutputStream out = connection.getOutputStream()) {
+            try (var out = connection.getOutputStream()) {
                 out.write(bytes);
             }
 
@@ -146,7 +146,7 @@ public class MsaAuthenticationService extends AuthenticationService {
 
     private String inputStreamToString(InputStream inputStream) throws IOException {
         var textBuilder = new StringBuilder();
-        try (@Cleanup var reader = new BufferedReader(new InputStreamReader(inputStream, Charset.forName(StandardCharsets.UTF_8.name())))) {
+        try (var reader = new BufferedReader(new InputStreamReader(inputStream, Charset.forName(StandardCharsets.UTF_8.name())))) {
             int c;
             while ((c = reader.read()) != -1) textBuilder.append((char) c);
         }
