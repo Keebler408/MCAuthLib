@@ -1,7 +1,6 @@
 package com.github.steveice10.mc.auth.service;
 
 import com.github.steveice10.mc.auth.data.GameProfile;
-import com.github.steveice10.mc.auth.exception.request.InvalidCredentialsException;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import lombok.Getter;
 import lombok.Setter;

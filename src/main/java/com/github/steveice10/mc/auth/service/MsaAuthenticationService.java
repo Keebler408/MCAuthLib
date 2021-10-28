@@ -7,12 +7,13 @@ import com.github.steveice10.mc.auth.exception.request.ServiceUnavailableExcepti
 import com.github.steveice10.mc.auth.exception.request.XboxRequestException;
 import com.github.steveice10.mc.auth.util.HTTP;
 import lombok.AccessLevel;
-import lombok.Cleanup;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-import java.io.*;
-import java.net.HttpURLConnection;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
