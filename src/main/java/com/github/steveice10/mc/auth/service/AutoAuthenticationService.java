@@ -86,10 +86,19 @@ public class AutoAuthenticationService extends AuthenticationService {
 
     @Override
     public void login() throws RequestException {
+        login(false);
+    }
+
+    @SuppressWarnings("unused")
+    public void loginMsFirst() throws RequestException {
+        login(true);
+    }
+
+    private void login(boolean msFirst) throws RequestException {
         try {
-            authType = attemptAuth(mojangAuth, AuthType.Mojang);
-        } catch (InvalidCredentialsException ex) {
-            authType = attemptAuth(msaAuth, AuthType.Microsoft);
+            authType = attemptAuth(mojangAuth, msFirst ? AuthType.Microsoft : AuthType.Mojang);
+        } catch (Exception ex) {
+            authType = attemptAuth(msaAuth, !msFirst ? AuthType.Microsoft : AuthType.Mojang);
         }
     }
 
