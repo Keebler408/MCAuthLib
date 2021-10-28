@@ -4,11 +4,11 @@ import com.github.steveice10.mc.auth.data.GameProfile;
 import com.github.steveice10.mc.auth.exception.profile.ProfileNotFoundException;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.util.HTTP;
+import com.github.steveice10.mc.auth.util.Sleep;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,8 +27,17 @@ public class ProfileService extends Service {
     /**
      * Creates a new ProfileService instance.
      */
+    @SuppressWarnings("unused")
     public ProfileService() {
         super(DEFAULT_BASE_URI);
+    }
+
+    private static Set<Set<String>> partition(Set<String> set, int size) {
+        var list = new ArrayList<>(set);
+        var ret = new HashSet<Set<String>>();
+        for (int i = 0; i < list.size(); i += size)
+            ret.add(new HashSet<>(list.subList(i, Math.min(i + size, list.size()))));
+        return ret;
     }
 
     /**
@@ -37,6 +46,7 @@ public class ProfileService extends Service {
      * @param names    Names to look for.
      * @param callback Callback to pass results to.
      */
+    @SuppressWarnings("unused")
     public void findProfilesByName(String[] names, ProfileLookupCallback callback) {
         this.findProfilesByName(names, callback, false);
     }
@@ -49,89 +59,61 @@ public class ProfileService extends Service {
      * @param async    Whether to perform requests asynchronously.
      */
     public void findProfilesByName(final String[] names, final ProfileLookupCallback callback, final boolean async) {
-        final Set<String> criteria = new HashSet<String>();
-        for(String name : names) {
-            if(name != null && !name.isEmpty()) {
+        var criteria = new HashSet<String>();
+        for (var name : names)
+            if (name != null && !name.isEmpty())
                 criteria.add(name.toLowerCase());
-            }
-        }
 
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                for(Set<String> request : partition(criteria, PROFILES_PER_REQUEST)) {
-                    Exception error = null;
-                    int failCount = 0;
-                    boolean tryAgain = true;
-                    while(failCount < MAX_FAIL_COUNT && tryAgain) {
-                        tryAgain = false;
-                        try {
-                            GameProfile[] profiles = HTTP.makeRequest(getProxy(), getEndpointUri(SEARCH_ENDPOINT), request, GameProfile[].class);
-                            failCount = 0;
-                            Set<String> missing = new HashSet<String>(request);
-                            for(GameProfile profile : profiles) {
-                                missing.remove(profile.getName().toLowerCase());
-                                callback.onProfileLookupSucceeded(profile);
-                            }
+        Runnable runnable = () -> {
+            for (var request : partition(criteria, PROFILES_PER_REQUEST)) {
 
-                            for(String name : missing) {
-                                callback.onProfileLookupFailed(new GameProfile((UUID) null, name), new ProfileNotFoundException("Server could not find the requested profile."));
-                            }
+                var failCount = 0;
+                var tryAgain = true;
 
-                            try {
-                                Thread.sleep(DELAY_BETWEEN_PAGES);
-                            } catch(InterruptedException ignored) {
-                            }
-                        } catch(RequestException e) {
-                            error = e;
-                            failCount++;
-                            if(failCount >= MAX_FAIL_COUNT) {
-                                for(String name : request) {
-                                    callback.onProfileLookupFailed(new GameProfile((UUID) null, name), error);
-                                }
-                            } else {
-                                try {
-                                    Thread.sleep(DELAY_BETWEEN_FAILURES);
-                                } catch(InterruptedException ignored) {
-                                }
+                while (failCount < MAX_FAIL_COUNT && tryAgain) {
+                    tryAgain = false;
+                    try {
+                        var profiles = HTTP.makeRequest(getProxy(), getEndpointUri(SEARCH_ENDPOINT), request, GameProfile[].class);
+                        failCount = 0;
+                        var missing = new HashSet<>(request);
 
-                                tryAgain = true;
-                            }
+                        for (var profile : profiles) {
+                            missing.remove(profile.getName().toLowerCase());
+                            callback.onProfileLookupSucceeded(profile);
+                        }
+
+                        for (var name : missing)
+                            callback.onProfileLookupFailed(new GameProfile((UUID) null, name), new ProfileNotFoundException("Server could not find the requested profile."));
+
+                        Sleep.ms(DELAY_BETWEEN_PAGES);
+                    } catch (RequestException ex) {
+                        failCount++;
+                        if (failCount >= MAX_FAIL_COUNT)
+                            for (var name : request)
+                                callback.onProfileLookupFailed(new GameProfile((UUID) null, name), ex);
+                        else {
+                            Sleep.ms(DELAY_BETWEEN_FAILURES);
+                            tryAgain = true;
                         }
                     }
                 }
             }
         };
 
-        if(async) {
-            new Thread(runnable, "ProfileLookupThread").start();
-        } else {
-            runnable.run();
-        }
-    }
-
-    private static Set<Set<String>> partition(Set<String> set, int size) {
-        List<String> list = new ArrayList<String>(set);
-        Set<Set<String>> ret = new HashSet<Set<String>>();
-        for(int i = 0; i < list.size(); i += size) {
-            Set<String> s = new HashSet<String>();
-            s.addAll(list.subList(i, Math.min(i + size, list.size())));
-            ret.add(s);
-        }
-
-        return ret;
+        if (async) new Thread(runnable, "ProfileLookupThread").start();
+        else runnable.run();
     }
 
     /**
      * Callback for reporting profile lookup results.
      */
-    public static interface ProfileLookupCallback {
+    public interface ProfileLookupCallback {
         /**
          * Called when a profile lookup request succeeds.
          *
          * @param profile Profile resulting from the request.
          */
-        public void onProfileLookupSucceeded(GameProfile profile);
+        void onProfileLookupSucceeded(GameProfile profile);
 
         /**
          * Called when a profile lookup request fails.
@@ -139,6 +121,6 @@ public class ProfileService extends Service {
          * @param profile Profile that failed to be located.
          * @param e       Exception causing the failure.
          */
-        public void onProfileLookupFailed(GameProfile profile, Exception e);
+        void onProfileLookupFailed(GameProfile profile, Exception e);
     }
 }
