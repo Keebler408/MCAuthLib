@@ -1,13 +1,15 @@
 package com.github.steveice10.mc.auth.exception.property;
 
+import lombok.NoArgsConstructor;
+
+import java.io.Serial;
+
 /**
  * Thrown when an error occurs while validating a signature.
  */
+@NoArgsConstructor
 public class SignatureValidateException extends PropertyException {
-    private static final long serialVersionUID = 1L;
-
-    public SignatureValidateException() {
-    }
+    @Serial private static final long serialVersionUID = 1L;
 
     public SignatureValidateException(String message) {
         super(message);

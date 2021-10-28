@@ -11,16 +11,6 @@ import java.util.UUID;
  * Utility class for serializing and deserializing UUIDs.
  */
 public class UUIDSerializer extends TypeAdapter<UUID> {
-    @Override
-    public void write(JsonWriter out, UUID value) throws IOException {
-        out.value(fromUUID(value));
-    }
-
-    @Override
-    public UUID read(JsonReader in) throws IOException {
-        return fromString(in.nextString());
-    }
-
     /**
      * Converts a UUID to a String.
      *
@@ -28,10 +18,7 @@ public class UUIDSerializer extends TypeAdapter<UUID> {
      * @return The resulting String.
      */
     public static String fromUUID(UUID value) {
-        if(value == null) {
-            return "";
-        }
-
+        if (value == null) return "";
         return value.toString().replace("-", "");
     }
 
@@ -42,10 +29,17 @@ public class UUIDSerializer extends TypeAdapter<UUID> {
      * @return The resulting UUID.
      */
     public static UUID fromString(String value) {
-        if(value == null || value.equals("")) {
-            return null;
-        }
-
+        if (value == null || value.isEmpty()) return null;
         return UUID.fromString(value.replaceFirst("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})", "$1-$2-$3-$4-$5"));
+    }
+
+    @Override
+    public void write(JsonWriter out, UUID value) throws IOException {
+        out.value(fromUUID(value));
+    }
+
+    @Override
+    public UUID read(JsonReader in) throws IOException {
+        return fromString(in.nextString());
     }
 }

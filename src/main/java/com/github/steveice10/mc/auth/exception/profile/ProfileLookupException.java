@@ -1,13 +1,15 @@
 package com.github.steveice10.mc.auth.exception.profile;
 
+import lombok.NoArgsConstructor;
+
+import java.io.Serial;
+
 /**
  * Thrown when an error occurs while looking up a profile.
  */
+@NoArgsConstructor
 public class ProfileLookupException extends ProfileException {
-    private static final long serialVersionUID = 1L;
-
-    public ProfileLookupException() {
-    }
+    @Serial private static final long serialVersionUID = 1L;
 
     public ProfileLookupException(String message) {
         super(message);

@@ -1,13 +1,15 @@
 package com.github.steveice10.mc.auth.exception.request;
 
+import lombok.NoArgsConstructor;
+
+import java.io.Serial;
+
 /**
  * Thrown when using the username of an account that has been migrated to an email address.
  */
+@NoArgsConstructor
 public class UserMigratedException extends InvalidCredentialsException {
-    private static final long serialVersionUID = 1L;
-
-    public UserMigratedException() {
-    }
+    @Serial private static final long serialVersionUID = 1L;
 
     public UserMigratedException(String message) {
         super(message);

@@ -1,13 +1,15 @@
 package com.github.steveice10.mc.auth.exception.profile;
 
+import lombok.NoArgsConstructor;
+
+import java.io.Serial;
+
 /**
  * Thrown when a profile cannot be found.
  */
+@NoArgsConstructor
 public class ProfileNotFoundException extends ProfileException {
-    private static final long serialVersionUID = 1L;
-
-    public ProfileNotFoundException() {
-    }
+    @Serial private static final long serialVersionUID = 1L;
 
     public ProfileNotFoundException(String message) {
         super(message);

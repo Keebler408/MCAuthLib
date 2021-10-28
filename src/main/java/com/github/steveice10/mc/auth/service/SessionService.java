@@ -7,6 +7,8 @@ import com.github.steveice10.mc.auth.exception.profile.ProfileNotFoundException;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.util.HTTP;
 import com.github.steveice10.mc.auth.util.UUIDSerializer;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 
 import javax.crypto.SecretKey;
 import java.math.BigInteger;
@@ -18,7 +20,6 @@ import java.security.PublicKey;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -26,9 +27,10 @@ import java.util.UUID;
  */
 public class SessionService extends Service {
     private static final URI DEFAULT_BASE_URI = URI.create("https://sessionserver.mojang.com/session/minecraft/");
-    private static final String JOIN_ENDPOINT = "join";
-    private static final String HAS_JOINED_ENDPOINT = "hasJoined";
-    private static final String PROFILE_ENDPOINT = "profile";
+    private static final String
+            JOIN_ENDPOINT = "join",
+            HAS_JOINED_ENDPOINT = "hasJoined",
+            PROFILE_ENDPOINT = "profile";
 
     /**
      * Creates a new SessionService instance.
@@ -46,14 +48,15 @@ public class SessionService extends Service {
      * @return The calculated server ID.
      * @throws IllegalStateException If the server ID hash algorithm is unavailable.
      */
+    @SuppressWarnings("unused")
     public String getServerId(String base, PublicKey publicKey, SecretKey secretKey) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-1");
+            var digest = MessageDigest.getInstance("SHA-1");
             digest.update(base.getBytes(StandardCharsets.ISO_8859_1));
             digest.update(secretKey.getEncoded());
             digest.update(publicKey.getEncoded());
             return new BigInteger(digest.digest()).toString(16);
-        } catch(NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Server ID hash algorithm unavailable.", e);
         }
     }
@@ -66,8 +69,9 @@ public class SessionService extends Service {
      * @param serverId            ID of the server to join.
      * @throws RequestException If an error occurs while making the request.
      */
+    @SuppressWarnings("unused")
     public void joinServer(GameProfile profile, String authenticationToken, String serverId) throws RequestException {
-        JoinServerRequest request = new JoinServerRequest(authenticationToken, profile.getId(), serverId);
+        var request = new JoinServerRequest(authenticationToken, profile.getId(), serverId);
         HTTP.makeRequest(this.getProxy(), this.getEndpointUri(JOIN_ENDPOINT), request, null);
     }
 
@@ -79,19 +83,18 @@ public class SessionService extends Service {
      * @return The profile of the given user, or null if they are not logged in to the given server.
      * @throws RequestException If an error occurs while making the request.
      */
+    @SuppressWarnings("unused")
     public GameProfile getProfileByServer(String name, String serverId) throws RequestException {
-        Map<String, String> queryParams = new HashMap<>();
+        var queryParams = new HashMap<String, String>();
         queryParams.put("username", name);
         queryParams.put("serverId", serverId);
 
-        HasJoinedResponse response = HTTP.makeRequest(this.getProxy(), this.getEndpointUri(HAS_JOINED_ENDPOINT, queryParams), null, HasJoinedResponse.class);
-        if(response != null && response.id != null) {
-            GameProfile result = new GameProfile(response.id, name);
+        var response = HTTP.makeRequest(this.getProxy(), this.getEndpointUri(HAS_JOINED_ENDPOINT, queryParams), null, HasJoinedResponse.class);
+        if (response != null && response.id != null) {
+            var result = new GameProfile(response.id, name);
             result.setProperties(response.properties);
             return result;
-        } else {
-            return null;
-        }
+        } else return null;
     }
 
     /**
@@ -101,20 +104,18 @@ public class SessionService extends Service {
      * @return The given profile, after filling in its properties.
      * @throws ProfileException If the property lookup fails.
      */
+    @SuppressWarnings("unused")
     public GameProfile fillProfileProperties(GameProfile profile) throws ProfileException {
-        if(profile.getId() == null) {
-            return profile;
-        }
+        if (profile.getId() == null) return profile;
 
         try {
-            MinecraftProfileResponse response = HTTP.makeRequest(this.getProxy(), this.getEndpointUri(PROFILE_ENDPOINT + "/" + UUIDSerializer.fromUUID(profile.getId()), Collections.singletonMap("unsigned", "false")), null, MinecraftProfileResponse.class);
-            if(response == null) {
+            var response = HTTP.makeRequest(this.getProxy(), this.getEndpointUri(PROFILE_ENDPOINT + "/" + UUIDSerializer.fromUUID(profile.getId()), Collections.singletonMap("unsigned", "false")), null, MinecraftProfileResponse.class);
+            if (response == null)
                 throw new ProfileNotFoundException("Couldn't fetch profile properties for " + profile + " as the profile does not exist.");
-            }
 
             profile.setProperties(response.properties);
             return profile;
-        } catch(RequestException e) {
+        } catch (RequestException e) {
             throw new ProfileLookupException("Couldn't look up profile properties for " + profile + ".", e);
         }
     }
@@ -124,16 +125,12 @@ public class SessionService extends Service {
         return "SessionService{}";
     }
 
+    @AllArgsConstructor(access = AccessLevel.PROTECTED)
+    @SuppressWarnings("unused")
     private static class JoinServerRequest {
-        private String accessToken;
-        private UUID selectedProfile;
-        private String serverId;
-
-        protected JoinServerRequest(String accessToken, UUID selectedProfile, String serverId) {
-            this.accessToken = accessToken;
-            this.selectedProfile = selectedProfile;
-            this.serverId = serverId;
-        }
+        private final String accessToken;
+        private final UUID selectedProfile;
+        private final String serverId;
     }
 
     private static class HasJoinedResponse {
@@ -141,6 +138,7 @@ public class SessionService extends Service {
         public List<GameProfile.Property> properties;
     }
 
+    @SuppressWarnings("unused")
     private static class MinecraftProfileResponse {
         public UUID id;
         public String name;

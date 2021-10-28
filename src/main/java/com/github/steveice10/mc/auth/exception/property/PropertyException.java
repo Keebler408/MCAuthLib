@@ -1,13 +1,15 @@
 package com.github.steveice10.mc.auth.exception.property;
 
+import lombok.NoArgsConstructor;
+
+import java.io.Serial;
+
 /**
  * Thrown when a property-related error occurs.
  */
+@NoArgsConstructor
 public class PropertyException extends Exception {
-    private static final long serialVersionUID = 1L;
-
-    public PropertyException() {
-    }
+    @Serial private static final long serialVersionUID = 1L;
 
     public PropertyException(String message) {
         super(message);
