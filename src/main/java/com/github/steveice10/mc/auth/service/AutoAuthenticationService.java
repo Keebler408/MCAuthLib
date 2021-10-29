@@ -98,7 +98,7 @@ public class AutoAuthenticationService extends AuthenticationService {
         login(true);
     }
 
-    private void login(boolean msFirst) throws RequestException {
+    public void login(boolean msFirst) throws RequestException {
         try {
             authType = attemptAuth(mojangAuth, msFirst ? AuthType.Microsoft : AuthType.Mojang);
         } catch (Exception ex) {
