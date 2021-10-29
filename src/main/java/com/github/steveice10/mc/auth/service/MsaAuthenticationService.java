@@ -232,6 +232,7 @@ public class MsaAuthenticationService extends AuthenticationService {
                 '}';
     }
 
+    //#region Requests
     @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
     private static class MsCodeRequest {
         private final String client_id;
@@ -319,7 +320,9 @@ public class MsaAuthenticationService extends AuthenticationService {
             this.identityToken = String.format("XBL3.0 x=%s;%s", uhs, identityToken);
         }
     }
+    //#endregion
 
+    //#region Responses
     @SuppressWarnings("unused")
     public static class MsCodeResponse {
         public String user_code;
@@ -385,4 +388,5 @@ public class MsaAuthenticationService extends AuthenticationService {
             public String alias;
         }
     }
+    //#endregion
 }
