@@ -142,7 +142,7 @@ public class MsaAuthenticationService extends AuthenticationService {
             throw new ServiceUnavailableException("Could not make request to '" + urlPost + "'.", e);
         }
 
-        return getLoginResponseFromToken(Objects.requireNonNull(HTTP.makeRequestForm(this.getProxy(), MS_TOKEN_ENDPOINT, new MsTokenRequest(code).toMap(), MsTokenResponse.class)).access_token);
+        return getLoginResponseFromToken(Objects.requireNonNull(HTTP.makeRequestForm(this.getProxy(), MS_TOKEN_ENDPOINT, new MsTokenRequest(code, clientId).toMap(), MsTokenResponse.class)).access_token);
     }
 
     private String inputStreamToString(InputStream inputStream) throws IOException {
@@ -261,11 +261,12 @@ public class MsaAuthenticationService extends AuthenticationService {
 
     @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
     private static class MsTokenRequest {
+        private final String client_id;
         private final String code;
 
         public Map<String, String> toMap() {
             var map = new HashMap<String, String>();
-            map.put("client_id", "00000000402b5328");
+            map.put("client_id", client_id);
             map.put("code", code);
             map.put("grant_type", "authorization_code");
             map.put("redirect_uri", "https://login.live.com/oauth20_desktop.srf");
