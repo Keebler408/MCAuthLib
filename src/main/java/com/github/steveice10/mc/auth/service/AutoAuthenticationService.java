@@ -46,6 +46,11 @@ public class AutoAuthenticationService extends AuthenticationService {
         return authType == AuthType.Mojang ? mojangAuth : msaAuth;
     }
 
+    @SuppressWarnings("unused")
+    public void setRefreshToken(String refreshToken) {
+        msaAuth.setRefreshToken(refreshToken);
+    }
+
     //#region Generic overrides
     @Override
     public String getAccessToken() {
