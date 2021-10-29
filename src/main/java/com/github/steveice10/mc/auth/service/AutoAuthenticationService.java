@@ -93,16 +93,11 @@ public class AutoAuthenticationService extends AuthenticationService {
         login(false);
     }
 
-    @SuppressWarnings("unused")
-    public void loginMsFirst() throws RequestException {
-        login(true);
-    }
-
     public void login(boolean msFirst) throws RequestException {
         try {
-            authType = attemptAuth(mojangAuth, msFirst ? AuthType.Microsoft : AuthType.Mojang);
+            authType = attemptAuth(msFirst ?msaAuth : mojangAuth, msFirst ? AuthType.Microsoft : AuthType.Mojang);
         } catch (Exception ex) {
-            authType = attemptAuth(msaAuth, !msFirst ? AuthType.Microsoft : AuthType.Mojang);
+            authType = attemptAuth(!msFirst ?msaAuth : mojangAuth, !msFirst ? AuthType.Microsoft : AuthType.Mojang);
         }
     }
 
