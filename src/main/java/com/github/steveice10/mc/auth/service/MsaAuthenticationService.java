@@ -9,6 +9,7 @@ import com.github.steveice10.mc.auth.util.HTTP;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -35,6 +36,7 @@ public class MsaAuthenticationService extends AuthenticationService {
     private static final Pattern CODE_PATTERN = Pattern.compile("[?|&]code=([\\w.-]+)");
     @Getter private final String clientId;
     private String deviceCode;
+    @Getter @Setter private String refreshToken;
 
     @SuppressWarnings("unused")
     public MsaAuthenticationService(String clientId) {
@@ -75,6 +77,7 @@ public class MsaAuthenticationService extends AuthenticationService {
         var response = HTTP.makeRequestForm(this.getProxy(), MS_CODE_TOKEN_ENDPOINT, request.toMap(), MsTokenResponse.class);
 
         assert response != null;
+        refreshToken = response.refresh_token;
         return getLoginResponseFromToken("d=".concat(response.access_token));
     }
 
@@ -155,6 +158,27 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     /**
+     * Refreshes the access token and refresh token for further use
+     *
+     * @return The response containing the refresh token, so the user can store it for later use.
+     */
+    public MsTokenResponse refreshToken() throws RequestException {
+        if (this.refreshToken == null) throw new InvalidCredentialsException("Invalid refresh token.");
+        var response = HTTP.makeRequestForm(this.getProxy(), MS_TOKEN_ENDPOINT, new MsRefreshRequest(clientId, refreshToken).toMap(), MsTokenResponse.class);
+        assert response != null;
+        accessToken = response.access_token;
+        refreshToken = response.refresh_token;
+        return response;
+    }
+
+    /**
+     * Attempt to sign in using an existing refresh token set by {@link #setRefreshToken(String)}
+     */
+    private McLoginResponse getLoginResponseFromRefreshToken() throws RequestException {
+        return getLoginResponseFromToken("d=".concat(refreshToken().access_token));
+    }
+
+    /**
      * Get a Minecraft login response from the given
      * Microsoft access token
      *
@@ -194,16 +218,18 @@ public class MsaAuthenticationService extends AuthenticationService {
         boolean token = this.clientId != null && !this.clientId.isEmpty();
         boolean device = this.deviceCode != null && !this.deviceCode.isEmpty();
         boolean password = this.password != null && !this.password.isEmpty();
+        boolean refresh = this.refreshToken != null && !this.refreshToken.isEmpty();
 
-        if (!token && !password) throw new InvalidCredentialsException("Invalid password or access token.");
+        if (!token && !password && !refresh)
+            throw new InvalidCredentialsException("Invalid password, access token, or refresh token.");
         if (password && (this.username == null || this.username.isEmpty()))
             throw new InvalidCredentialsException("Invalid username.");
 
         // Attempt to get device code
-        if (!password && !device) this.deviceCode = getAuthCode().device_code;
+        if (!password && !device && !refresh) this.deviceCode = getAuthCode().device_code;
 
-        // Get the response
-        var response = password ? getLoginResponseFromCreds() : getLoginResponseFromCode();
+        // Try to log in to the users account, using either credentials, refresh token, or device code
+        var response = password ? getLoginResponseFromCreds() : refresh ? getLoginResponseFromRefreshToken() : getLoginResponseFromCode();
         if (response == null) throw new RequestException("Invalid response received.");
         else this.accessToken = response.access_token;
 
@@ -275,6 +301,20 @@ public class MsaAuthenticationService extends AuthenticationService {
         }
     }
 
+    @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
+    private static class MsRefreshRequest {
+        private final String client_id;
+        private final String refresh_token;
+
+        public Map<String, String> toMap() {
+            var map = new HashMap<String, String>();
+            map.put("client_id", client_id);
+            map.put("refresh_token", refresh_token);
+            map.put("grant_type", "refresh_token");
+            return map;
+        }
+    }
+
     @SuppressWarnings({"unused", "FieldCanBeLocal"})
     private static class XblAuthRequest {
         private final String RelyingParty = "http://auth.xboxlive.com";
@@ -335,7 +375,7 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     @SuppressWarnings("unused")
-    private static class MsTokenResponse {
+    public static class MsTokenResponse {
         public String token_type;
         public String scope;
         public int expires_in;
