@@ -10,13 +10,11 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 import java.net.URI;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public class MojangAuthenticationService extends AuthenticationService {
     private static final URI DEFAULT_BASE_URI = URI.create("https://authserver.mojang.com/");
+    private static final URI MSA_MIGRATION_CHECK_URI = URI.create("https://api.minecraftservices.com/rollout/v1/msamigration");
     private static final String AUTHENTICATE_ENDPOINT = "authenticate";
     private static final String REFRESH_ENDPOINT = "refresh";
     private static final String INVALIDATE_ENDPOINT = "invalidate";
@@ -106,6 +104,18 @@ public class MojangAuthenticationService extends AuthenticationService {
         this.selectedProfile = response.selectedProfile;
     }
 
+    /**
+     * Checks if the current profile is eligible to migrate to a Microsoft account.
+     *
+     * @return True if the account can be migrated, otherwise false.
+     */
+    public boolean msaMigrationCheck() throws RequestException {
+        if (!this.loggedIn) throw new RequestException("Cannot check migration eligibility while not logged in.");
+        return Objects.requireNonNull(
+                HTTP.makeRequest(this.getProxy(), MSA_MIGRATION_CHECK_URI, null, MsaMigrationCheckResponse.class,
+                        Collections.singletonMap("Authorization", String.format("Bearer %s", this.accessToken)))).rollout;
+    }
+
     @Override
     public String toString() {
         return "MojangUserAuthentication{clientToken=" + this.clientToken + ", username=" + this.username + ", accessToken=" + this.accessToken + ", loggedIn=" + this.loggedIn + ", profiles=" + this.profiles + ", selectedProfile=" + this.selectedProfile + "}";
@@ -155,5 +165,11 @@ public class MojangAuthenticationService extends AuthenticationService {
         public GameProfile selectedProfile;
         public GameProfile[] availableProfiles;
         public User user;
+    }
+
+    @SuppressWarnings("unused")
+    private static class MsaMigrationCheckResponse {
+        public String feature;
+        public boolean rollout;
     }
 }
