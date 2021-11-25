@@ -95,9 +95,9 @@ public class AutoAuthenticationService extends AuthenticationService {
 
     public void login(boolean msFirst) throws RequestException {
         try {
-            authType = attemptAuth(msFirst ?msaAuth : mojangAuth, msFirst ? AuthType.Microsoft : AuthType.Mojang);
+            authType = attemptAuth(msFirst ? msaAuth : mojangAuth, msFirst ? AuthType.Microsoft : AuthType.Mojang);
         } catch (Exception ex) {
-            authType = attemptAuth(!msFirst ?msaAuth : mojangAuth, !msFirst ? AuthType.Microsoft : AuthType.Mojang);
+            authType = attemptAuth(!msFirst ? msaAuth : mojangAuth, !msFirst ? AuthType.Microsoft : AuthType.Mojang);
         }
     }
 
@@ -135,7 +135,7 @@ public class AutoAuthenticationService extends AuthenticationService {
         service.login();
 
         if (allowLogging)
-            System.out.printf("Authenticated using: %s%s%n", type, password != null && !password.isEmpty() ? " (using device code)" : "");
+            System.out.printf("Authenticated using: %s%s%n", type, password != null && !password.isEmpty() ? "" : " (using device code)");
 
         return type;
     }
