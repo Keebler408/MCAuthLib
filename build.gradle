@@ -6,14 +6,14 @@ plugins {
 }
 
 group 'com.github.steveice10'
-version '1.5-tycrek-15'
+version '1.5-tycrek-16'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    implementation "com.google.code.gson:gson:2.8.8"
+    implementation 'com.google.code.gson:gson:2.8.9'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
 }
