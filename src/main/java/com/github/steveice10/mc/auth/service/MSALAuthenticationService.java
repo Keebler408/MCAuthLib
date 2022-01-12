@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 
 public class MSALAuthenticationService extends AuthenticationService {
     private static final String AUTHORITY = "https://login.microsoftonline.com/consumers/";
-    private static final String[] SCOPES = new String[]{"XboxLive.signin", "XboxLive.offline_access"};
+    private static final String[] SCOPES = new String[]{"XboxLive.signin", "offline_access"};
 
     @Getter private final String clientId;
     private final PublicClientApplication app;
