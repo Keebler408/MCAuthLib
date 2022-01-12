@@ -39,10 +39,23 @@ public class MsaAuthenticationService extends AuthenticationService {
     private String deviceCode;
     private String clientId;
 
+    /**
+     * Creates a new {@link AuthenticationService} instance for Microsoft accounts.
+     *
+     * @see <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app">Register an application with the Microsoft identity platform</a>
+     * @param clientId Azure app registration client ID.
+     */
     public MsaAuthenticationService(String clientId) {
         this(clientId, null);
     }
 
+    /**
+     * Creates a new {@link AuthenticationService} instance for Microsoft accounts.
+     *
+     * @see <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app">Register an application with the Microsoft identity platform</a>
+     * @param clientId Azure app registration client ID.
+     * @param deviceCode Device code for an in-progress authentication request.
+     */
     public MsaAuthenticationService(String clientId, String deviceCode) {
         super(EMPTY_URI);
 
@@ -55,8 +68,9 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     /**
-     * Generate a single use code for Microsoft authentication
+     * Generate a single-use code for Microsoft authentication using "device code" flow.
      *
+     * @see <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code">Microsoft identity platform and the OAuth 2.0 device authorization grant flow</a>
      * @return The code along with other returned data
      * @throws RequestException
      */
@@ -71,8 +85,7 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     /**
-     * Attempt to get the authentication data from the previously
-     * generated device code from {@link #getAuthCode()}
+     * Attempt to get the authentication data from the previously generated device code from {@link #getAuthCode()}
      *
      * @return The final Minecraft authentication data
      * @throws RequestException
@@ -87,6 +100,11 @@ public class MsaAuthenticationService extends AuthenticationService {
         return getLoginResponseFromToken("d=" + response.access_token);
     }
 
+    /**
+     * Attempt to login to a Microsoft account using credentials (username and password)
+     *
+     * @throws RequestException
+     */
     private McLoginResponse getLoginResponseFromCreds(String username, String password) throws RequestException {
         // TODO: Migrate alot of this to {@link HTTP}
 
@@ -182,10 +200,9 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     /**
-     * Get a Minecraft login response from the given
-     * Microsoft access token
+     * Get a Minecraft login response from the given Microsoft access token
      *
-     * @param accessToken the access token
+     * @param accessToken The access token
      * @return The Minecraft login response
      */
     private McLoginResponse getLoginResponseFromToken(String accessToken) throws RequestException {

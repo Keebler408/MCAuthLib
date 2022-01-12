@@ -19,14 +19,14 @@ public class MojangAuthenticationService extends AuthenticationService {
     private String clientToken;
 
     /**
-     * Creates a new AuthenticationService instance.
+     * Creates a new {@link AuthenticationService} instance for Mojang accounts.
      */
     public MojangAuthenticationService() {
         this(UUID.randomUUID().toString());
     }
 
     /**
-     * Creates a new AuthenticationService instance.
+     * Creates a new {@link AuthenticationService} instance for Mojang accounts.
      *
      * @param clientToken Client token to use when making authentication requests.
      */

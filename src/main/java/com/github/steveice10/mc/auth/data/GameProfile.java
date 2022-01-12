@@ -54,6 +54,11 @@ public class GameProfile {
         GSON = new GsonBuilder().registerTypeAdapter(UUID.class, new UUIDSerializer()).create();
     }
 
+    /**
+     * Checks if the provided URL is a valid Mojang-owned domain.
+     *
+     * @param url The URL to check.
+     */
     private static boolean isWhitelistedDomain(String url) {
         URI uri;
         try {
@@ -116,6 +121,7 @@ public class GameProfile {
     /**
      * Gets the ID of the profile.
      *
+     * @see <a href="https://minecraft.fandom.com/wiki/Universally_unique_identifier">Universally unique identifier (Minecraft wiki)</a>
      * @return The profile's ID.
      */
     public UUID getId() {
