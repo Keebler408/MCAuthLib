@@ -71,8 +71,7 @@ public class SessionService extends Service {
      */
     @SuppressWarnings("unused")
     public void joinServer(GameProfile profile, String authenticationToken, String serverId) throws RequestException {
-        var request = new JoinServerRequest(authenticationToken, profile.getId(), serverId);
-        HTTP.makeRequest(this.getProxy(), this.getEndpointUri(JOIN_ENDPOINT), request, null);
+        HTTP.makeRequest(getProxy(), getEndpointUri(JOIN_ENDPOINT), new JoinServerRequest(authenticationToken, profile.getId(), serverId), null);
     }
 
     /**

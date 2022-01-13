@@ -11,6 +11,7 @@ import java.util.UUID;
  * Utility class for serializing and deserializing UUIDs.
  */
 public class UUIDSerializer extends TypeAdapter<UUID> {
+
     /**
      * Converts a UUID to a String.
      *
@@ -18,8 +19,7 @@ public class UUIDSerializer extends TypeAdapter<UUID> {
      * @return The resulting String.
      */
     public static String fromUUID(UUID value) {
-        if (value == null) return "";
-        return value.toString().replace("-", "");
+        return (value == null) ? "" : value.toString().replace("-", "");
     }
 
     /**
@@ -29,8 +29,7 @@ public class UUIDSerializer extends TypeAdapter<UUID> {
      * @return The resulting UUID.
      */
     public static UUID fromString(String value) {
-        if (value == null || value.isEmpty()) return null;
-        return UUID.fromString(value.replaceFirst("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})", "$1-$2-$3-$4-$5"));
+        return (value == null || value.isEmpty()) ? null : UUID.fromString(value.replaceFirst("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})", "$1-$2-$3-$4-$5"));
     }
 
     @Override

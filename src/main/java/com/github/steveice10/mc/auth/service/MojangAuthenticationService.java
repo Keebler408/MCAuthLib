@@ -36,7 +36,10 @@ public class MojangAuthenticationService extends AuthenticationService {
      */
     public MojangAuthenticationService(String clientToken) {
         super(DEFAULT_BASE_URI);
-        if (clientToken == null) throw new IllegalArgumentException("ClientToken cannot be null.");
+
+        if (clientToken == null)
+            throw new IllegalArgumentException("ClientToken cannot be null.");
+
         this.clientToken = clientToken;
     }
 
@@ -47,20 +50,21 @@ public class MojangAuthenticationService extends AuthenticationService {
 
         boolean token = this.accessToken != null && !this.accessToken.isEmpty();
         boolean password = this.password != null && !this.password.isEmpty();
-        if (!token && !password) throw new InvalidCredentialsException("Invalid password or access token.");
 
-        var response = HTTP.makeRequest(
-                this.getProxy(),
-                token ? this.getEndpointUri(REFRESH_ENDPOINT) : this.getEndpointUri(AUTHENTICATE_ENDPOINT),
+        if (!token && !password)
+            throw new InvalidCredentialsException("Invalid password or access token.");
+
+        var response = HTTP.makeRequest(getProxy(),
+                token ? getEndpointUri(REFRESH_ENDPOINT) : getEndpointUri(AUTHENTICATE_ENDPOINT),
                 token ? new RefreshRequest(this.clientToken, this.accessToken, null) : new AuthenticationRequest(this.username, this.password, this.clientToken),
                 AuthenticateRefreshResponse.class);
 
-        if (response == null) throw new RequestException("Server returned invalid response.");
+        if (response == null)
+            throw new RequestException("Server returned invalid response.");
         else if (!response.clientToken.equals(this.clientToken))
             throw new RequestException("Server responded with incorrect client token.");
 
-        if (response.user != null && response.user.id != null) this.id = response.user.id;
-        else this.id = this.username;
+        this.id = (response.user != null && response.user.id != null) ? response.user.id : this.username;
 
         this.accessToken = response.accessToken;
         this.profiles = response.availableProfiles != null ? Arrays.asList(response.availableProfiles) : Collections.emptyList();
@@ -73,8 +77,7 @@ public class MojangAuthenticationService extends AuthenticationService {
     }
 
     public void logout() throws RequestException {
-        MojangAuthenticationService.InvalidateRequest request = new MojangAuthenticationService.InvalidateRequest(this.clientToken, this.accessToken);
-        HTTP.makeRequest(this.getProxy(), this.getEndpointUri(INVALIDATE_ENDPOINT), request);
+        HTTP.makeRequest(getProxy(), getEndpointUri(INVALIDATE_ENDPOINT), new InvalidateRequest(this.clientToken, this.accessToken));
         super.logout();
         this.id = null;
     }
@@ -87,16 +90,20 @@ public class MojangAuthenticationService extends AuthenticationService {
      */
     @SuppressWarnings("unused")
     public void selectGameProfile(GameProfile profile) throws RequestException {
-        if (!this.loggedIn) throw new RequestException("Cannot change game profile while not logged in.");
+        if (!this.loggedIn)
+            throw new RequestException("Cannot change game profile while not logged in.");
         else if (this.selectedProfile != null)
             throw new RequestException("Cannot change game profile when it is already selected.");
         else if (profile == null || !this.profiles.contains(profile))
             throw new IllegalArgumentException("Invalid profile '" + profile + "'.");
 
-        var request = new RefreshRequest(this.clientToken, this.accessToken, profile);
-        var response = HTTP.makeRequest(this.getProxy(), this.getEndpointUri(REFRESH_ENDPOINT), request, AuthenticateRefreshResponse.class);
+        var response = HTTP.makeRequest(getProxy(),
+                getEndpointUri(REFRESH_ENDPOINT),
+                new RefreshRequest(this.clientToken, this.accessToken, profile),
+                AuthenticateRefreshResponse.class);
 
-        if (response == null) throw new RequestException("Server returned invalid response.");
+        if (response == null)
+            throw new RequestException("Server returned invalid response.");
         else if (!response.clientToken.equals(this.clientToken))
             throw new RequestException("Server responded with incorrect client token.");
 
@@ -109,16 +116,25 @@ public class MojangAuthenticationService extends AuthenticationService {
      *
      * @return True if the account can be migrated, otherwise false.
      */
+    @SuppressWarnings("unused")
     public boolean msaMigrationCheck() throws RequestException {
-        if (!this.loggedIn) throw new RequestException("Cannot check migration eligibility while not logged in.");
+        if (!this.loggedIn)
+            throw new RequestException("Cannot check migration eligibility while not logged in.");
         return Objects.requireNonNull(
-                HTTP.makeRequest(this.getProxy(), MSA_MIGRATION_CHECK_URI, null, MsaMigrationCheckResponse.class,
+                HTTP.makeRequest(getProxy(), MSA_MIGRATION_CHECK_URI, null, MsaMigrationCheckResponse.class,
                         Collections.singletonMap("Authorization", String.format("Bearer %s", this.accessToken)))).rollout;
     }
 
     @Override
     public String toString() {
-        return "MojangUserAuthentication{clientToken=" + this.clientToken + ", username=" + this.username + ", accessToken=" + this.accessToken + ", loggedIn=" + this.loggedIn + ", profiles=" + this.profiles + ", selectedProfile=" + this.selectedProfile + "}";
+        return "MojangUserAuthentication{clientToken=" + this.clientToken
+                + ", username=" + this.username
+                + ", accessToken=" + this.accessToken
+                + ", loggedIn=" + this.loggedIn
+                + ", profiles=" + this.profiles
+                + ", selectedProfile=" + this.selectedProfile
+                + ", id=" + this.id
+                + "}";
     }
 
     @SuppressWarnings("unused")
