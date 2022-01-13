@@ -172,14 +172,9 @@ public class MsaAuthenticationService extends AuthenticationService {
             throw new RequestException("Invalid response received.");
         else this.accessToken = response.access_token;
 
-        try {
-            getProfile();
-        } catch (RequestException ex) {
-            ex.printStackTrace(); // this was ignored before
-            // We are on a cracked account
-            if (this.username == null || this.username.isEmpty())
-                this.username = response.username; // Not sure what this username is but its sent back from the API
-        }
+        // Finalize login by fetching the profile
+        getProfile();
+
         this.loggedIn = true;
     }
 
