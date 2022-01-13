@@ -31,3 +31,7 @@ publishing {
         }
     }
 }
+
+task updateGradle(type: Wrapper) {
+    gradleVersion = '7.3.3'
+}
