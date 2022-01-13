@@ -19,6 +19,10 @@ public abstract class AuthenticationService extends Service {
     protected List<GameProfile.Property> properties = new ArrayList<>();
     protected List<GameProfile> profiles = new ArrayList<>();
 
+    public AuthenticationService() {
+        this(URI.create(""));
+    }
+
     public AuthenticationService(URI defaultURI) {
         super(defaultURI);
     }
