@@ -6,7 +6,10 @@ import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.exception.request.ServiceUnavailableException;
 import com.github.steveice10.mc.auth.exception.request.XboxRequestException;
 import com.github.steveice10.mc.auth.util.HTTP;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 
 import java.io.BufferedReader;
 import java.io.IOException;

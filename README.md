@@ -47,6 +47,16 @@ dependencies {
 
 ~~MCAuthLib uses Maven to manage dependencies. To build the source code, run `mvn clean install` in the project root directory.~~ Now uses Gradle, will need to update this section.
 
+## Authentication Types
+
+Visit [wiki.vg](https://wiki.vg/) for documentation on [Mojang API authentication](https://wiki.vg/Authentication) and [Microsoft's API authentication](https://wiki.vg/Microsoft_Authentication_Scheme).
+
+| `AuthenticationService` | Usage |
+| :---: | --- |
+| `MojangAuthenticationService` | Used for authenticating Mojang accounts. Supports regular Mojang accounts (email) and legacy accounts (username). |
+| `MsaAuthenticationService` | Used for authenticating Microsoft accounts. This service is a custom implementation using a combination of Microsoft, Mojang, and Xbox API's. |
+| `MSALAuthenticationService` | Alternative service for authenticating Microsoft accounts. This service uses the [Microsoft Authentication Library (MSAL) for Java](https://github.com/AzureAD/microsoft-authentication-library-for-java) to authenticate. |
+
 ## Support and development
 
 Please join [the GeyserMC Discord server](https://discord.gg/geysermc) and visit the **#mcprotocollib** channel for discussion and support for this project.
