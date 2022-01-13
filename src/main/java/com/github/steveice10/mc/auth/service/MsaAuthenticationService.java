@@ -260,12 +260,28 @@ public class MsaAuthenticationService extends AuthenticationService {
     //#region Requests
     @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
     private static class MsCodeRequest {
-        private final String client_id;
+        private String client_id;
+        private String scope;
+
+        /**
+         * Creates a request with no offline access
+         */
+        protected MsCodeRequest(String clientId) {
+            this(clientId, false);
+        }
+
+        /**
+         * @param offlineAccess Set to true to request offline access for the refresh token, allowing re-authentication.
+         */
+        protected MsCodeRequest(String clientId, boolean offlineAccess) {
+            this.client_id = clientId;
+            this.scope = "XboxLive.signin".concat(offlineAccess ? " offline_access" : "");
+        }
 
         public Map<String, String> toMap() {
             var map = new HashMap<String, String>();
             map.put("client_id", client_id);
-            map.put("scope", "XboxLive.signin offline_access");
+            map.put("scope", scope);
             return map;
         }
     }
