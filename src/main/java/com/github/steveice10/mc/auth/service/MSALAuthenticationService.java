@@ -8,7 +8,6 @@ import com.microsoft.aad.msal4j.*;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -57,7 +56,6 @@ public class MSALAuthenticationService extends AuthenticationService {
      * @see <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-java-token-cache-serialization">Custom token cache serialization in MSAL for Java</a>
      */
     public MSALAuthenticationService(String clientId, boolean offlineAccess, String authority, ITokenCacheAccessAspect tokenCacheAccessAspect) throws IOException {
-        super(URI.create(""));
         this.scopes = Set.of((offlineAccess ? XBOX_OFFLINE_SCOPE : XBOX_SIGNIN_SCOPE).split(" "));
 
         // Create MSAL client
@@ -99,10 +97,9 @@ public class MSALAuthenticationService extends AuthenticationService {
                 MsaAuthenticationService.MC_PROFILE_ENDPOINT,
                 null,
                 MsaAuthenticationService.McProfileResponse.class,
-                Collections.singletonMap("Authorization", "Bearer " + this.accessToken));
+                Collections.singletonMap("Authorization", "Bearer ".concat(this.accessToken)));
 
         assert response != null;
-
         this.selectedProfile = new GameProfile(response.id, response.name);
         this.profiles = Collections.singletonList(this.selectedProfile);
         this.username = response.name;

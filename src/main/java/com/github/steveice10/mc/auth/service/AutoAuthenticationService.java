@@ -5,7 +5,6 @@ import com.github.steveice10.mc.auth.exception.request.RequestException;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.net.URI;
 import java.util.List;
 
 /**
@@ -34,7 +33,6 @@ public class AutoAuthenticationService extends AuthenticationService {
      * Creates an automatic wrapper for {@link MojangAuthenticationService} and {@link MsaAuthenticationService}
      */
     public AutoAuthenticationService(String clientId, String deviceCode) {
-        super(URI.create(""));
         mojangAuth = new MojangAuthenticationService(clientId);
         msaAuth = new MsaAuthenticationService(clientId, deviceCode);
     }

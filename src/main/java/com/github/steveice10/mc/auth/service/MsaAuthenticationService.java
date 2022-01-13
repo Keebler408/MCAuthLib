@@ -35,8 +35,9 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     public MsaAuthenticationService(String clientId, String deviceCode) {
-        super(URI.create(""));
-        if (clientId == null) throw new IllegalArgumentException("ClientId cannot be null.");
+        if (clientId == null)
+            throw new IllegalArgumentException("ClientId cannot be null.");
+
         this.clientId = clientId;
         this.deviceCode = deviceCode;
     }
@@ -47,9 +48,13 @@ public class MsaAuthenticationService extends AuthenticationService {
      * @return The code along with other returned data
      */
     public MsCodeResponse getAuthCode() throws RequestException {
-        if (this.clientId == null) throw new InvalidCredentialsException("Invalid client id.");
-        var request = new MsCodeRequest(this.clientId);
-        var response = HTTP.makeRequestForm(this.getProxy(), MS_CODE_ENDPOINT, request.toMap(), MsCodeResponse.class);
+        if (this.clientId == null)
+            throw new InvalidCredentialsException("Invalid client id.");
+
+        var response = HTTP.makeRequestForm(getProxy(),
+                MS_CODE_ENDPOINT,
+                new MsCodeRequest(this.clientId).toMap(),
+                MsCodeResponse.class);
 
         assert response != null;
         this.deviceCode = response.device_code;
@@ -63,13 +68,17 @@ public class MsaAuthenticationService extends AuthenticationService {
      * @return The final Minecraft authentication data
      */
     private McLoginResponse getLoginResponseFromCode() throws RequestException {
-        if (this.deviceCode == null) throw new InvalidCredentialsException("Invalid device code.");
-        var request = new MsCodeTokenRequest(this.clientId, this.deviceCode);
-        var response = HTTP.makeRequestForm(this.getProxy(), MS_CODE_TOKEN_ENDPOINT, request.toMap(), MsTokenResponse.class);
+        if (this.deviceCode == null)
+            throw new InvalidCredentialsException("Invalid device code.");
+
+        var response = HTTP.makeRequestForm(getProxy(),
+                MS_CODE_TOKEN_ENDPOINT,
+                new MsCodeTokenRequest(this.clientId, this.deviceCode).toMap(),
+                MsTokenResponse.class);
 
         assert response != null;
-        refreshToken = response.refresh_token;
-        return getLoginResponseFromToken("d=".concat(response.access_token), this.getProxy());
+        this.refreshToken = response.refresh_token;
+        return getLoginResponseFromToken("d=".concat(response.access_token), getProxy());
     }
 
     /**
@@ -78,11 +87,17 @@ public class MsaAuthenticationService extends AuthenticationService {
      * @return The response containing the refresh token, so the user can store it for later use.
      */
     public MsTokenResponse refreshToken() throws RequestException {
-        if (this.refreshToken == null) throw new InvalidCredentialsException("Invalid refresh token.");
-        var response = HTTP.makeRequestForm(this.getProxy(), MS_TOKEN_ENDPOINT, new MsRefreshRequest(clientId, refreshToken).toMap(), MsTokenResponse.class);
+        if (this.refreshToken == null)
+            throw new InvalidCredentialsException("Invalid refresh token.");
+
+        var response = HTTP.makeRequestForm(getProxy(),
+                MS_TOKEN_ENDPOINT,
+                new MsRefreshRequest(this.clientId, this.refreshToken).toMap(),
+                MsTokenResponse.class);
+
         assert response != null;
-        accessToken = response.access_token;
-        refreshToken = response.refresh_token;
+        this.accessToken = response.access_token;
+        this.refreshToken = response.refresh_token;
         return response;
     }
 
@@ -90,7 +105,7 @@ public class MsaAuthenticationService extends AuthenticationService {
      * Attempt to sign in using an existing refresh token set by {@link #setRefreshToken(String)}
      */
     private McLoginResponse getLoginResponseFromRefreshToken() throws RequestException {
-        return getLoginResponseFromToken("d=".concat(refreshToken().access_token), this.getProxy());
+        return getLoginResponseFromToken("d=".concat(refreshToken().access_token), getProxy());
     }
 
     /**
@@ -121,7 +136,12 @@ public class MsaAuthenticationService extends AuthenticationService {
      * Fetch the profile for the current account
      */
     private void getProfile() throws RequestException {
-        var response = HTTP.makeRequest(this.getProxy(), MC_PROFILE_ENDPOINT, null, McProfileResponse.class, Collections.singletonMap("Authorization", "Bearer " + this.accessToken));
+        var response = HTTP.makeRequest(getProxy(),
+                MC_PROFILE_ENDPOINT,
+                null,
+                McProfileResponse.class,
+                Collections.singletonMap("Authorization", "Bearer ".concat(this.accessToken)));
+
         assert response != null;
         this.selectedProfile = new GameProfile(response.id, response.name);
         this.profiles = Collections.singletonList(this.selectedProfile);
@@ -146,9 +166,10 @@ public class MsaAuthenticationService extends AuthenticationService {
         if (!device && !refresh)
             this.deviceCode = getAuthCode().device_code;
 
-        // Try to log in to the users account, using either credentials, refresh token, or device code
+        // Try to log in to the users account, using either refresh token or device code
         var response = refresh ? getLoginResponseFromRefreshToken() : getLoginResponseFromCode();
-        if (response == null) throw new RequestException("Invalid response received.");
+        if (response == null)
+            throw new RequestException("Invalid response received.");
         else this.accessToken = response.access_token;
 
         try {
