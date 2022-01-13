@@ -1,8 +1,38 @@
-# MCAuthLib
+<div align="center">
 
-[![Release](https://jitpack.io/v/tycrek/MCAuthLib.svg?style=flat-square)](https://jitpack.io/#tycrek/MCAuthLib)
+MCAuthLib (tycrek edition)
+===
 
-MCAuthLib is a library for authentication with Minecraft accounts. It is used in projects such as [MCProtocolLib](https://github.com/GeyserMC/MCProtocolLib) to handle authenticating users.
+[![Image]][Jitpack]
+
+*A Minecraft authentication library for MCProtocolLib*
+
+[Image]: https://jitpack.io/v/tycrek/MCAuthLib.svg?style=flat-square
+[Jitpack]: https://jitpack.io/#tycrek/MCAuthLib/
+</div>
+
+---
+
+**MCAuthLib** is a library for authentication with Minecraft accounts. It is used in projects such as [MCProtocolLib](https://github.com/GeyserMC/MCProtocolLib) to handle authenticating users. Further, projects such as [ttRMS](https://ttrms.io/) use MCProtocolLib for interacting with Minecraft servers & clients.
+
+## tycrek edition
+
+I use MCAuthLib (and MCProtocolLib) in one of my other projects, [ttRMS](https://ttrms.io/). I've made some changes to better suit my needs.
+
+The biggest differences between my repo and the [GeyserMC repo](https://github.com/GeyserMC/MCAuthLib) are:
+
+- Project now uses **Gradle** instead of Maven
+- Target JDK is now **Java 16**, instead of Java 7
+- My repo utilizes **Lombok** to reduce manual boilerplate
+
+Some other changes to improve the library's functionality:
+
+- **Two new `AuthenticationService`'s** (see [Authentication Types](#authentication-types))
+  - `AutoAuthenticationService`
+  - `MSALAuthenticationService`
+- Refresh tokens for `MsaAuthenticationService`
+- Finished Device Code Flow implementation for `MsaAuthenticationService`
+- Removed password authentication from `MsaAuthenticationService` as it was broken and not secure
 
 ## Example code
 
@@ -21,7 +51,7 @@ repositories {
 ```
 ```groovy
 dependencies {
-    implementation 'com.github.tycrek:MCAuthLib:__version'
+    implementation 'com.github.tycrek:MCAuthLib:__version__'
 }
 ```
 
@@ -55,6 +85,7 @@ Visit [wiki.vg](https://wiki.vg/) for documentation on [Mojang API authenticatio
 | :---: | --- |
 | `MojangAuthenticationService` | Used for authenticating Mojang accounts. Supports regular Mojang accounts (email) and legacy accounts (username). |
 | `MsaAuthenticationService` | Used for authenticating Microsoft accounts. This service is a custom implementation using a combination of Microsoft, Mojang, and Xbox API's. |
+| `AutoAuthenticationService` | Wrapper service combining `Mojang` and `Msa` services. Automatically determines which service to sign in with. Can be complex to figure out. |
 | `MSALAuthenticationService` | Alternative service for authenticating Microsoft accounts. This service uses the [Microsoft Authentication Library (MSAL) for Java](https://github.com/AzureAD/microsoft-authentication-library-for-java) to authenticate. |
 
 ## Support and development
