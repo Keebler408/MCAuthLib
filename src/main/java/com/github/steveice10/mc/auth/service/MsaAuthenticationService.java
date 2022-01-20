@@ -6,89 +6,115 @@ import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.exception.request.ServiceUnavailableException;
 import com.github.steveice10.mc.auth.exception.request.XboxRequestException;
 import com.github.steveice10.mc.auth.util.HTTP;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
+import com.github.steveice10.mc.auth.util.MSALApplicationOptions;
+import com.microsoft.aad.msal4j.*;
+import lombok.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.Proxy;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 public class MsaAuthenticationService extends AuthenticationService {
-    private static final URI MS_CODE_ENDPOINT = URI.create("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode");
-    private static final URI MS_CODE_TOKEN_ENDPOINT = URI.create("https://login.microsoftonline.com/consumers/oauth2/v2.0/token");
-    private static final URI MS_LOGIN_ENDPOINT = URI.create("https://login.live.com/oauth20_authorize.srf?redirect_uri=https://login.live.com/oauth20_desktop.srf&scope=service::user.auth.xboxlive.com::MBI_SSL&display=touch&response_type=code&locale=en&client_id=00000000402b5328");
+    /**
+     * This ID is Microsoft's official Xbox app ID. It will bypass the OAuth grant permission prompts, and also allows
+     * child accounts to authenticate. These are not something developers are able to do in custom Azure applications.
+     */
+    public static final String MINECRAFT_CLIENT_ID = "00000000402b5328";
+
+    private static final URI MS_LOGIN_ENDPOINT = URI.create(String.format("https://login.live.com/oauth20_authorize.srf?redirect_uri=https://login.live.com/oauth20_desktop.srf&scope=service::user.auth.xboxlive.com::MBI_SSL&display=touch&response_type=code&locale=en&client_id=%s", MINECRAFT_CLIENT_ID));
     private static final URI MS_TOKEN_ENDPOINT = URI.create("https://login.live.com/oauth20_token.srf");
     private static final URI XBL_AUTH_ENDPOINT = URI.create("https://user.auth.xboxlive.com/user/authenticate");
     private static final URI XSTS_AUTH_ENDPOINT = URI.create("https://xsts.auth.xboxlive.com/xsts/authorize");
     private static final URI MC_LOGIN_ENDPOINT = URI.create("https://api.minecraftservices.com/authentication/login_with_xbox");
-    public static final URI MC_PROFILE_ENDPOINT = URI.create("https://api.minecraftservices.com/minecraft/profile");
+    private static final URI MC_PROFILE_ENDPOINT = URI.create("https://api.minecraftservices.com/minecraft/profile");
     private static final Pattern PPFT_PATTERN = Pattern.compile("sFTTag:[ ]?'.*value=\"(.*)\"/>'");
     private static final Pattern URL_POST_PATTERN = Pattern.compile("urlPost:[ ]?'(.+?(?='))");
     private static final Pattern CODE_PATTERN = Pattern.compile("[?|&]code=([\\w.-]+)");
-    @Getter private final String clientId;
-    private String deviceCode;
-    @Getter @Setter private String refreshToken;
+    private static final long XBOX_ERROR_PREFIX = 2148916230L;
 
-    @SuppressWarnings("unused")
-    public MsaAuthenticationService(String clientId) {
-        this(clientId, null);
+    private final Set<String> scopes;
+    private final PublicClientApplication app;
+
+    private String clientId;
+    @Getter @Setter private String refreshToken;
+    private Consumer<DeviceCode> deviceCodeConsumer;
+
+    /**
+     * Create a new {@link AuthenticationService} for Microsoft accounts using default options.
+     * <p>
+     * The default options include the "consumers" authority (see <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-client-application-configuration#authority">MSAL documentation</a>),
+     * the <code>XboxLive.signin</code> scope, and a token persistence that saves/loads tokens to/from disk.
+     */
+    public MsaAuthenticationService(@NonNull String clientId) throws IOException {
+        this(clientId, new MSALApplicationOptions.Builder().build());
     }
 
-    public MsaAuthenticationService(String clientId, String deviceCode) {
-        if (clientId == null)
-            throw new IllegalArgumentException("ClientId cannot be null.");
+    /**
+     * Create a new {@link AuthenticationService} for Microsoft accounts using the given {@link MSALApplicationOptions}.
+     * <p>
+     * Anything not specified in the options will be set to the default values. For more control, use the
+     * {@link MSALApplicationOptions.Builder} to set your own options.
+     */
+    public MsaAuthenticationService(@NonNull String clientId, @NonNull MSALApplicationOptions msalOptions) throws MalformedURLException {
+        this(clientId, msalOptions.scopes, fixBuilderPersistence(
+                PublicClientApplication.builder(clientId).authority(msalOptions.authority), msalOptions).build());
+    }
+
+    /**
+     * Create a new {@link AuthenticationService} for Microsoft accounts with a custom MSAL {@link PublicClientApplication}.
+     * <p>
+     * This constructor is most useful if you need more granular control over the MSAL client on top of the provided
+     * configurable options. Please note that the {@link PublicClientApplication} must be configured with the same client
+     * ID as this service.
+     * <p>
+     * For more information on how to configure MSAL, see <a href="https://github.com/AzureAD/microsoft-authentication-library-for-java/wiki/Client-Applications">MSAL for Java documentation</a>.
+     */
+    public MsaAuthenticationService(@NonNull String clientId, @NonNull Set<String> scopes, @NonNull PublicClientApplication app) {
+        super(URI.create(""));
+
+        if (clientId.isEmpty())
+            throw new IllegalArgumentException("clientId cannot be null or empty.");
 
         this.clientId = clientId;
-        this.deviceCode = deviceCode;
+        this.scopes = scopes;
+        this.app = app;
     }
 
     /**
-     * Generate a single use code for Microsoft authentication
-     *
-     * @return The code along with other returned data
+     * Assists in creating a {@link PublicClientApplication.Builder} in one of the constructors.
+     * <p>
+     * Due to the nature of Builders and how MSAL handles null values, we need to do some extra work to ensure that
+     * persistence is set correctly.
      */
-    public MsCodeResponse getAuthCode() throws RequestException {
-        if (this.clientId == null)
-            throw new InvalidCredentialsException("Invalid client id.");
-
-        var response = HTTP.makeRequestForm(getProxy(),
-                MS_CODE_ENDPOINT,
-                new MsCodeRequest(this.clientId).toMap(),
-                MsCodeResponse.class);
-
-        assert response != null;
-        this.deviceCode = response.device_code;
-        return response;
+    private static PublicClientApplication.Builder fixBuilderPersistence(PublicClientApplication.Builder builder, MSALApplicationOptions options) {
+        // Set the token persistence, if specified. Necessary step as we cannot pass null to MSAL.
+        if (options.tokenPersistence != null)
+            builder.setTokenCacheAccessAspect(options.tokenPersistence);
+        return builder;
     }
 
     /**
-     * Attempt to get the authentication data from the previously
-     * generated device code from {@link #getAuthCode()}
+     * Sets the function to run when a <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code">Device Code flow</a> is requested.
+     * <p>
+     * The provided <code>consumer</code> will be called when Azure is ready for the user to authenticate. Your consumer
+     * should somehow get the user to authenticate with the provided URL and user code. How this is implemented is up to
+     * you. MSAL automatically handles waiting for the user to authenticate.
      *
-     * @return The final Minecraft authentication data
+     * @param consumer To be called when Azure wants the user to sign in. This involves showing the user the URL to open and the code to enter.
      */
-    private McLoginResponse getLoginResponseFromCode() throws RequestException {
-        if (this.deviceCode == null)
-            throw new InvalidCredentialsException("Invalid device code.");
-
-        var response = HTTP.makeRequestForm(getProxy(),
-                MS_CODE_TOKEN_ENDPOINT,
-                new MsCodeTokenRequest(this.clientId, this.deviceCode).toMap(),
-                MsTokenResponse.class);
-
-        assert response != null;
-        this.refreshToken = response.refresh_token;
-        return getLoginResponseFromToken("d=".concat(response.access_token), getProxy());
+    public void setDeviceCodeConsumer(@NonNull Consumer<DeviceCode> consumer) {
+        this.deviceCodeConsumer = consumer;
     }
 
     // ! this thing
@@ -99,7 +125,7 @@ public class MsaAuthenticationService extends AuthenticationService {
         String cookie, PPFT, urlPost;
 
         try {
-            var connection = HTTP.createUrlConnection(this.getProxy(), MS_LOGIN_ENDPOINT);
+            var connection = HTTP.createUrlConnection(getProxy(), MS_LOGIN_ENDPOINT);
             connection.setDoInput(true);
 
             try (var in = connection.getResponseCode() == 200 ? connection.getInputStream() : connection.getErrorStream()) {
@@ -113,14 +139,14 @@ public class MsaAuthenticationService extends AuthenticationService {
                     PPFT = mPPFT.group(1);
                     urlPost = mUrlPost.group(1);
                 } else
-                    throw new ServiceUnavailableException("Could not parse response of '" + MS_LOGIN_ENDPOINT + "'.");
+                    throw new ServiceUnavailableException(String.format("Could not parse response of '%s'.", MS_LOGIN_ENDPOINT));
             }
         } catch (IOException e) {
-            throw new ServiceUnavailableException("Could not make request to '" + MS_LOGIN_ENDPOINT + "'.", e);
+            throw new ServiceUnavailableException(String.format("Could not make request to '%s'.", MS_LOGIN_ENDPOINT), e);
         }
 
         if (cookie.isEmpty() || PPFT.isEmpty() || urlPost.isEmpty())
-            throw new RequestException("Invalid response from '" + MS_LOGIN_ENDPOINT + "' missing one or more of cookie, PPFT or urlPost");
+            throw new RequestException(String.format("Invalid response from '%s'. Missing one or more of cookie, PPFT, or urlPost", MS_LOGIN_ENDPOINT));
 
         var map = new HashMap<String, String>();
         map.put("login", this.username);
@@ -131,7 +157,7 @@ public class MsaAuthenticationService extends AuthenticationService {
         String code;
         try {
             var bytes = HTTP.formMapToString(map).getBytes(StandardCharsets.UTF_8);
-            var connection = HTTP.createUrlConnection(this.getProxy(), URI.create(urlPost));
+            var connection = HTTP.createUrlConnection(getProxy(), URI.create(urlPost));
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
             connection.setRequestProperty("Content-Length", String.valueOf(bytes.length));
             connection.setRequestProperty("Cookie", cookie);
@@ -150,12 +176,13 @@ public class MsaAuthenticationService extends AuthenticationService {
 
             var m = CODE_PATTERN.matcher(URLDecoder.decode(connection.getURL().toString(), StandardCharsets.UTF_8.name()));
             if (m.find()) code = m.group(1);
-            else throw new ServiceUnavailableException("Could not parse response of '" + urlPost + "'.");
+            else throw new ServiceUnavailableException(String.format("Could not parse response of '%s'.", urlPost));
         } catch (IOException e) {
-            throw new ServiceUnavailableException("Could not make request to '" + urlPost + "'.", e);
+            throw new ServiceUnavailableException(String.format("Could not make request to '%s'.", urlPost), e);
         }
 
-        return getLoginResponseFromToken(Objects.requireNonNull(HTTP.makeRequestForm(this.getProxy(), MS_TOKEN_ENDPOINT, new MsTokenRequest(code, clientId).toMap(), MsTokenResponse.class)).access_token, this.getProxy());
+        return getLoginResponseFromToken(Objects.requireNonNull(HTTP.makeRequestForm(
+                getProxy(), MS_TOKEN_ENDPOINT, new MsTokenRequest(this.clientId, code).toMap(), MsTokenResponse.class)).access_token);
     }
 
     private String inputStreamToString(InputStream inputStream) throws IOException {
@@ -173,7 +200,7 @@ public class MsaAuthenticationService extends AuthenticationService {
      * @return The response containing the refresh token, so the user can store it for later use.
      */
     public MsTokenResponse refreshToken() throws RequestException {
-        if (this.refreshToken == null)
+        if (this.refreshToken == null || this.refreshToken.isEmpty())
             throw new InvalidCredentialsException("Invalid refresh token.");
 
         var response = HTTP.makeRequestForm(getProxy(),
@@ -188,38 +215,58 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     /**
+     * Get an <code>IAccount</code> from the cache (if available) for re-authentication.
+     *
+     * @return An <code>IAccount</code> matching the username given to this <code>MSALAuthenticationService</code>
+     */
+    private IAccount getIAccount() {
+        return this.app.getAccounts().join().stream()
+                .filter(account -> account.username().equalsIgnoreCase(getUsername()))
+                .findFirst().orElse(null);
+    }
+
+    /**
+     * Get an access token from MSAL using Device Code flow authentication.
+     */
+    private CompletableFuture<IAuthenticationResult> getMsalAccessToken() throws MalformedURLException {
+        if (this.deviceCodeConsumer == null)
+            throw new IllegalStateException("Device code consumer is not set.");
+
+        var account = this.getIAccount();
+        return (account == null)
+                ? this.app.acquireToken(DeviceCodeFlowParameters.builder(this.scopes, this.deviceCodeConsumer).build())
+                : this.app.acquireTokenSilently(SilentParameters.builder(this.scopes, account).build());
+    }
+
+    /**
      * Attempt to sign in using an existing refresh token set by {@link #setRefreshToken(String)}
      */
     private McLoginResponse getLoginResponseFromRefreshToken() throws RequestException {
-        return getLoginResponseFromToken("d=".concat(refreshToken().access_token), getProxy());
+        return getLoginResponseFromToken("d=".concat(refreshToken().access_token));
     }
 
     /**
-     * Get a Minecraft login response from the given
-     * Microsoft access token
-     *
-     * @param accessToken the access token
-     * @return The Minecraft login response
+     * Get a Minecraft login response from the given Microsoft access token
      */
-    public static McLoginResponse getLoginResponseFromToken(String accessToken, Proxy proxy) throws RequestException {
-        var response = HTTP.makeRequest(proxy, XBL_AUTH_ENDPOINT, new XblAuthRequest(accessToken), XblAuthResponse.class);
-        response = HTTP.makeRequest(proxy, XSTS_AUTH_ENDPOINT, new XstsAuthRequest(response.Token), XblAuthResponse.class);
+    private McLoginResponse getLoginResponseFromToken(String accessToken) throws RequestException {
+        var response = HTTP.makeRequest(getProxy(), XBL_AUTH_ENDPOINT, new XblAuthRequest(accessToken), XblAuthResponse.class);
+        response = HTTP.makeRequest(getProxy(), XSTS_AUTH_ENDPOINT, new XstsAuthRequest(response.Token), XblAuthResponse.class);
 
-        if (response.XErr != 0)
-            if (response.XErr == 2148916233L)
-                throw new XboxRequestException("Microsoft account does not have an Xbox Live account attached!");
-            else if (response.XErr == 2148916235L)
-                throw new XboxRequestException("Xbox Live is not available in your country!");
-            else if (response.XErr == 2148916238L)
-                throw new XboxRequestException("This account is a child account! Please add it to a family in order to log in.");
-            else
-                throw new XboxRequestException("Error occurred while authenticating to Xbox Live! Error ID: " + response.XErr);
+        var xboxErrorCode = (int) (response.XErr - XBOX_ERROR_PREFIX);
+        System.out.printf("XErr: %d%n", xboxErrorCode);
+        if (xboxErrorCode != 0)
+            switch (xboxErrorCode) {
+                case 3 -> throw new XboxRequestException("Microsoft account does not have an Xbox Live account attached!");
+                case 5 -> throw new XboxRequestException("Xbox Live is not available in your country!");
+                case 8 -> throw new XboxRequestException("This account is a child account! Please add it to a family in order to log in.");
+                default -> throw new XboxRequestException(String.format("Error occurred while authenticating to Xbox Live! Error ID: %s", response.XErr));
+            }
 
-        return HTTP.makeRequest(proxy, MC_LOGIN_ENDPOINT, new McLoginRequest(response.DisplayClaims.xui[0].uhs, response.Token), McLoginResponse.class);
+        return HTTP.makeRequest(getProxy(), MC_LOGIN_ENDPOINT, new McLoginRequest(response.DisplayClaims.xui[0].uhs, response.Token), McLoginResponse.class);
     }
 
     /**
-     * Fetch the profile for the current account
+     * Finalizes the authentication process using Xbox API's.
      */
     private void getProfile() throws RequestException {
         var response = HTTP.makeRequest(getProxy(),
@@ -236,88 +283,45 @@ public class MsaAuthenticationService extends AuthenticationService {
 
     @Override
     public void login() throws RequestException {
-        boolean token = this.clientId != null && !this.clientId.isEmpty();
-        boolean device = this.deviceCode != null && !this.deviceCode.isEmpty();
-        boolean password = this.password != null && !this.password.isEmpty();
-        boolean refresh = this.refreshToken != null && !this.refreshToken.isEmpty();
+        try {
+            boolean password = this.password != null && !this.password.isEmpty();
+            boolean refresh = this.refreshToken != null && !this.refreshToken.isEmpty();
 
-        if (!token && !password && !refresh)
-            throw new InvalidCredentialsException("Invalid password, access token, or refresh token.");
-        if (password && (this.username == null || this.username.isEmpty()))
-            throw new InvalidCredentialsException("Invalid username.");
+            // Complain if the username is not set
+            if (this.username == null || this.username.isEmpty())
+                throw new InvalidCredentialsException("Invalid username.");
 
-        // Attempt to get device code
-        if (!password && !device && !refresh) this.deviceCode = getAuthCode().device_code;
+            // Fix client ID if a password is set
+            if (password)
+                this.clientId = MINECRAFT_CLIENT_ID;
 
-        // Try to log in to the users account, using either credentials, refresh token, or device code
-        var response = password ? getLoginResponseFromCreds() : refresh ? getLoginResponseFromRefreshToken() : getLoginResponseFromCode();
-        if (response == null) throw new RequestException("Invalid response received.");
-        else this.accessToken = response.access_token;
+            // Try to log in to the users account, using refresh token, credentials, or device code
+            var response = refresh ? getLoginResponseFromRefreshToken()
+                    : password ? getLoginResponseFromCreds()
+                    : getLoginResponseFromToken("d=".concat(getMsalAccessToken().get().accessToken()));
 
-        // Finalize login by fetching the profile
-        getProfile();
+            if (response == null)
+                throw new RequestException("Invalid response received.");
+            this.accessToken = response.access_token;
 
-        this.loggedIn = true;
+            // Get the profile to complete the login process
+            getProfile();
+
+            this.loggedIn = true;
+        } catch (MalformedURLException | ExecutionException | InterruptedException ex) {
+            throw new RequestException(ex);
+        }
     }
 
     @Override
     public String toString() {
         return "MsaAuthenticationService{" +
-                "deviceCode='" + this.deviceCode + '\'' +
-                ", clientId='" + this.clientId + '\'' +
-                ", accessToken='" + this.accessToken + '\'' +
+                "clientId='" + this.clientId + '\'' +
                 ", loggedIn=" + this.loggedIn +
-                ", username='" + this.username + '\'' +
-                ", password='" + this.password + '\'' +
-                ", selectedProfile=" + this.selectedProfile +
-                ", properties=" + this.properties +
-                ", profiles=" + this.profiles +
                 '}';
     }
 
     //#region Requests
-    @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
-    private static class MsCodeRequest {
-        private String client_id;
-        private String scope;
-
-        /**
-         * Creates a request with no offline access
-         */
-        protected MsCodeRequest(String clientId) {
-            this(clientId, false);
-        }
-
-        /**
-         * @param offlineAccess Set to true to request offline access for the refresh token, allowing re-authentication.
-         */
-        protected MsCodeRequest(String clientId, boolean offlineAccess) {
-            this.client_id = clientId;
-            this.scope = "XboxLive.signin".concat(offlineAccess ? " offline_access" : "");
-        }
-
-        public Map<String, String> toMap() {
-            var map = new HashMap<String, String>();
-            map.put("client_id", client_id);
-            map.put("scope", scope);
-            return map;
-        }
-    }
-
-    @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
-    private static class MsCodeTokenRequest {
-        private final String client_id;
-        private final String device_code;
-
-        public Map<String, String> toMap() {
-            var map = new HashMap<String, String>();
-            map.put("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
-            map.put("client_id", client_id);
-            map.put("device_code", device_code);
-            return map;
-        }
-    }
-
     @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
     private static class MsTokenRequest {
         private final String client_id;

@@ -25,14 +25,7 @@ The biggest differences between my repo and the [GeyserMC repo](https://github.c
 - Target JDK is now **Java 16**, instead of Java 7
 - My repo utilizes **Lombok** to reduce manual boilerplate
 
-Some other changes to improve the library's functionality:
-
-- **Two new `AuthenticationService`'s** (see [Authentication Types](#authentication-types))
-  - `AutoAuthenticationService`
-  - `MSALAuthenticationService`
-- Refresh tokens for `MsaAuthenticationService`
-- Finished Device Code Flow implementation for `MsaAuthenticationService`
-- Removed password authentication from `MsaAuthenticationService` as it was broken and not secure
+Generally, users of my fork would be looking for a more modern codebase.
 
 ## Example code
 
@@ -84,9 +77,7 @@ Visit [wiki.vg](https://wiki.vg/) for documentation on [Mojang API authenticatio
 | `AuthenticationService` | Usage |
 | :---: | --- |
 | `MojangAuthenticationService` | Used for authenticating Mojang accounts. Supports regular Mojang accounts (email) and legacy accounts (username). |
-| `MsaAuthenticationService` | Used for authenticating Microsoft accounts. This service is a custom implementation using a combination of Microsoft, Mojang, and Xbox API's. |
-| `AutoAuthenticationService` | Wrapper service combining `Mojang` and `Msa` services. Automatically determines which service to sign in with. Can be complex to figure out. |
-| `MSALAuthenticationService` | Alternative service for authenticating Microsoft accounts. This service uses the [Microsoft Authentication Library (MSAL) for Java](https://github.com/AzureAD/microsoft-authentication-library-for-java) to authenticate. |
+| `MsaAuthenticationService` | Used for authenticating Microsoft accounts.<br>Device Code auth uses the [Microsoft Authentication Library (MSAL) for Java](https://github.com/AzureAD/microsoft-authentication-library-for-java). <br>Username/password auth uses a custom implementation using a combination of Microsoft, Mojang, and Xbox API's. |
 
 ## Support and development
 
