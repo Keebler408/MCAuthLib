@@ -41,7 +41,6 @@ public class MsaAuthenticationService extends AuthenticationService {
     private static final Pattern PPFT_PATTERN = Pattern.compile("sFTTag:[ ]?'.*value=\"(.*)\"/>'");
     private static final Pattern URL_POST_PATTERN = Pattern.compile("urlPost:[ ]?'(.+?(?='))");
     private static final Pattern CODE_PATTERN = Pattern.compile("[?|&]code=([\\w.-]+)");
-    private static final long XBOX_ERROR_PREFIX = 2148916230L;
 
     private final Set<String> scopes;
     private final PublicClientApplication app;
@@ -252,10 +251,8 @@ public class MsaAuthenticationService extends AuthenticationService {
         var response = HTTP.makeRequest(getProxy(), XBL_AUTH_ENDPOINT, new XblAuthRequest(accessToken), XblAuthResponse.class);
         response = HTTP.makeRequest(getProxy(), XSTS_AUTH_ENDPOINT, new XstsAuthRequest(response.Token), XblAuthResponse.class);
 
-        var xboxErrorCode = (int) (response.XErr - XBOX_ERROR_PREFIX);
-        System.out.printf("XErr: %d%n", xboxErrorCode);
-        if (xboxErrorCode != 0)
-            switch (xboxErrorCode) {
+        if (response.XErr != 0)
+            switch ((int) (response.XErr - 2148916230L)) {
                 case 3 -> throw new XboxRequestException("Microsoft account does not have an Xbox Live account attached!");
                 case 5 -> throw new XboxRequestException("Xbox Live is not available in your country!");
                 case 8 -> throw new XboxRequestException("This account is a child account! Please add it to a family in order to log in.");
