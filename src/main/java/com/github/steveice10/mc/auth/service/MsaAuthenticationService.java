@@ -19,7 +19,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidParameterException;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -339,34 +338,19 @@ public class MsaAuthenticationService extends Service {
     }
 
     /**
-     * Get an access token from MSAL using Device Code flow authentication.
+     * Get the Microsoft Account username from the MSAL cache if the cache only contains a single user.
+     * This enables interactive and code-based authentication callers to avoid storing the username separately.
+     *
+     * @return An <code>IAccount</code> if the cache contains a single account, otherwise <code>null</code>
      */
-    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingDeviceCode() throws MalformedURLException {
-        if (this.deviceCodeConsumer == null)
-            throw new IllegalStateException("Device code consumer is not set.");
-
-        return this.app.acquireToken(DeviceCodeFlowParameters.builder(this.scopes, this.deviceCodeConsumer).build());
-    }
-
-    /**
-     * Get an access token from MSAL using Interactive Request flow authentication.
-     * @throws URISyntaxException
-     */
-    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingInteractiveRequest() throws MalformedURLException, URISyntaxException {
-        return this.app.acquireToken(InteractiveRequestParameters.builder(new URI("http://localhost")).scopes(this.scopes).build());
-    }
-
-    /**
-     * Attempt to sign in using an existing account
-     * @throws MalformedURLException
-     */
-    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingRefreshToken() throws RequestException, MalformedURLException {
-        IAccount account = getIAccount();
-        if (account == null) {
-            throw new RequestException("Account not found in cache:" + this.msaUsername);
+    public String getSingleAccountMsaUsername() {
+        Set<IAccount> accounts = this.app.getAccounts().join();
+        if (accounts.size() != 1) {
+            return null;
         }
 
-        return this.app.acquireTokenSilently(SilentParameters.builder(this.scopes, account).build());
+        IAccount account = accounts.stream().findFirst().orElse(null);
+        return account != null ? account.username() : null;
     }
 
     /**
@@ -492,27 +476,51 @@ public class MsaAuthenticationService extends Service {
         return this.getLoginResponseFromCreds();
     }
 
+    /**
+     * Attempt to sign in using the cached refresh token associated with this.msaUsername
+     */
     private McLoginResponse loginWithRefreshToken() throws RequestException {
         try {
             checkMsaUsername();
-            return this.getLoginResponseFromToken("d=".concat(this.getMsalAccessTokenUsingRefreshToken().get().accessToken()));
+            IAccount account = getIAccount();
+            if (account == null) {
+                throw new RequestException("Account not found in cache:" + this.msaUsername);
+            }
+    
+            SilentParameters silentAuthParams = SilentParameters.builder(this.scopes, account).build();
+            IAuthenticationResult authResult = this.app.acquireTokenSilently(silentAuthParams).get();
+            return this.getLoginResponseFromToken("d=".concat(authResult.accessToken()));
         } catch (MalformedURLException | InterruptedException | ExecutionException ex) {
             throw new RequestException(ex);
         }
     }
 
+    /**
+     * Attempts to log in using the MSAL Interactive flow.
+     */
     private McLoginResponse loginUsingInteractiveFlow() throws RequestException {
         try {
-            return this.getLoginResponseFromToken("d=".concat(this.getMsalAccessTokenUsingInteractiveRequest().get().accessToken()));
-        } catch (URISyntaxException | MalformedURLException | InterruptedException | ExecutionException ex) {
+            InteractiveRequestParameters interactiveFlowParams = InteractiveRequestParameters.builder(new URI("http://localhost")).scopes(this.scopes).build();
+            IAuthenticationResult authResult = this.app.acquireToken(interactiveFlowParams).get();
+            return this.getLoginResponseFromToken("d=".concat(authResult.accessToken()));
+        } catch (URISyntaxException | InterruptedException | ExecutionException ex) {
             throw new RequestException(ex);
         }
     }
 
+    /**
+     * Attempts to log in using the MSAL Device Code flow.
+     */
     private McLoginResponse loginUsingDeviceCodeFlow() throws RequestException {
         try {
-            return this.getLoginResponseFromToken("d=".concat(this.getMsalAccessTokenUsingDeviceCode().get().accessToken()));
-        } catch (MalformedURLException | InterruptedException | ExecutionException ex) {
+            if (this.deviceCodeConsumer == null) {
+                throw new IllegalStateException("Device code consumer is not set.");
+            }
+
+            DeviceCodeFlowParameters deviceCodeFlowParams = DeviceCodeFlowParameters.builder(this.scopes, this.deviceCodeConsumer).build();
+            IAuthenticationResult authResult = this.app.acquireToken(deviceCodeFlowParams).get();
+            return this.getLoginResponseFromToken("d=".concat(authResult.accessToken()));
+        } catch (InterruptedException | ExecutionException ex) {
             throw new RequestException(ex);
         }
     }
