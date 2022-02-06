@@ -16,6 +16,8 @@ import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.rmi.UnexpectedException;
+import java.security.InvalidParameterException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -23,7 +25,27 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MsaAuthenticationService extends AuthenticationService {
+public class MsaAuthenticationService extends Service {
+    public enum AuthenticationFlow {
+
+        NOT_SPECIFIED,
+        USERNAME_PASSWORD,
+        DEVICE_CODE_FLOW,
+        REFRESH_TOKEN,
+        INTERACTIVE_FLOW
+        // AUTHORIZATION_CODE(831),
+        //ACQUIRE_TOKEN_SILENTLY
+    }
+
+    protected String accessToken;
+    protected boolean loggedIn;
+    protected String msaUsername;
+    protected String msaPassword;
+    protected String minecraftUsername;
+    protected GameProfile selectedProfile;
+    protected List<GameProfile.Property> properties = new ArrayList<>();
+    protected List<GameProfile> profiles = new ArrayList<>();
+
     /**
      * This ID is Microsoft's official Xbox app ID. It will bypass the OAuth grant permission prompts, and also allows
      * child accounts to authenticate. These are not something developers are able to do in custom Azure applications.
@@ -48,7 +70,7 @@ public class MsaAuthenticationService extends AuthenticationService {
     private Consumer<DeviceCode> deviceCodeConsumer;
 
     /**
-     * Create a new {@link AuthenticationService} for Microsoft accounts using default options.
+     * Create a new {@link MsaAuthenticationService} for Microsoft accounts using default options.
      * <p>
      * The default options include the "consumers" authority (see <a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-client-application-configuration#authority">MSAL documentation</a>),
      * the <code>XboxLive.signin</code> scope, and a token persistence that saves/loads tokens to/from disk.
@@ -58,7 +80,7 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     /**
-     * Create a new {@link AuthenticationService} for Microsoft accounts using the given {@link MSALApplicationOptions}.
+     * Create a new {@link MsaAuthenticationService} for Microsoft accounts using the given {@link MSALApplicationOptions}.
      * <p>
      * Anything not specified in the options will be set to the default values. For more control, use the
      * {@link MSALApplicationOptions.Builder} to set your own options.
@@ -89,6 +111,104 @@ public class MsaAuthenticationService extends AuthenticationService {
     }
 
     /**
+     * Gets the access token of the service.
+     *
+     * @return The user's access token.
+     */
+    public String getAccessToken() {
+        return this.accessToken;
+    }
+
+    /**
+     * Gets whether the service has been used to log in.
+     *
+     * @return Whether the service is logged in.
+     */
+    public boolean isLoggedIn() {
+        return this.loggedIn;
+    }
+
+    /**
+     * Gets the Microsoft Account username.
+     *
+     * @return The Microsoft Account username.
+     */
+    public String getMsaUsername() {
+        return this.msaUsername;
+    }
+
+    /**
+     * Sets the Microsoft Account username.
+     *
+     * @param username Username to set.
+     */
+    public void setMsaUsername(String username) {
+        if (this.loggedIn) {
+            throw new IllegalStateException("Cannot change username while user is logged in.");
+        }
+        
+        this.msaUsername = username;
+    }
+
+    /**
+     * Gets the Microsoft account password.
+     *
+     * @return The user's Microsoft account password.
+     */
+    public String getPassword() {
+        return this.msaPassword;
+    }
+
+    /**
+     * Sets the Microsoft Account password.
+     *
+     * @param password Password to set.
+     */
+    public void setMsaPassword(String password) {
+        if(this.loggedIn) {
+            throw new IllegalStateException("Cannot change password while user is logged in.");
+        } else {
+            this.msaPassword = password;
+        }
+    }
+
+    /**
+     * Gets the Minecraft Account username.
+     *
+     * @return The Minecraft Account username.
+     */
+    public String getMinecraftUsername() {
+        return this.minecraftUsername;
+    }
+
+    /**
+     * Gets the properties of the user logged in with the service.
+     *
+     * @return The user's properties.
+     */
+    public List<GameProfile.Property> getProperties() {
+        return Collections.unmodifiableList(this.properties);
+    }
+
+    /**
+     * Gets the available profiles of the user logged in with the service.
+     *
+     * @return The user's available profiles.
+     */
+    public List<GameProfile> getAvailableProfiles() {
+        return Collections.unmodifiableList(this.profiles);
+    }
+
+    /**
+     * Gets the selected profile of the user logged in with the service.
+     *
+     * @return The user's selected profile.
+     */
+    public GameProfile getSelectedProfile() {
+        return this.selectedProfile;
+    }
+
+    /**
      * Assists in creating a {@link PublicClientApplication.Builder} in one of the constructors.
      *
      * Due to the nature of Builders and how MSAL handles null values, we need to do some extra work to ensure that
@@ -99,21 +219,6 @@ public class MsaAuthenticationService extends AuthenticationService {
         if (options.tokenPersistence != null)
             builder.setTokenCacheAccessAspect(options.tokenPersistence);
         return builder;
-    }
-
-    /**
-     * Gets the current refresh token for this session
-     */
-    public String getRefreshToken() {
-        return this.refreshToken;
-    }
-
-    /**
-     * Sets a new refresh token. Useful for re-authenticating from device code authorizations.
-     * @param refreshToken The refresh token to set
-     */
-    public void setRefreshToken(String refreshToken) {
-        this.refreshToken = refreshToken;
     }
 
     /**
@@ -166,9 +271,9 @@ public class MsaAuthenticationService extends AuthenticationService {
 
         Map<String, String> map = new HashMap<>();
 
-        map.put("login", this.username);
-        map.put("loginfmt", this.username);
-        map.put("passwd", this.password);
+        map.put("login", this.msaUsername);
+        map.put("loginfmt", this.msaUsername);
+        map.put("passwd", this.msaPassword);
         map.put("PPFT", PPFT);
 
         String postData = HTTP.formMapToString(map);
@@ -249,20 +354,30 @@ public class MsaAuthenticationService extends AuthenticationService {
      */
     private IAccount getIAccount() {
         return this.app.getAccounts().join().stream()
-                .filter(account -> account.username().equalsIgnoreCase(this.getUsername()))
+                .filter(account -> account.username().equalsIgnoreCase(this.getMsaUsername()))
                 .findFirst().orElse(null);
     }
 
     /**
      * Get an access token from MSAL using Device Code flow authentication.
      */
-    private CompletableFuture<IAuthenticationResult> getMsalAccessToken() throws MalformedURLException {
+    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingDeviceCode() throws MalformedURLException {
         if (this.deviceCodeConsumer == null)
             throw new IllegalStateException("Device code consumer is not set.");
 
         IAccount account = this.getIAccount();
         if (account == null)
             return this.app.acquireToken(DeviceCodeFlowParameters.builder(this.scopes, this.deviceCodeConsumer).build());
+        else return this.app.acquireTokenSilently(SilentParameters.builder(this.scopes, account).build());
+    }
+
+    /**
+     * Get an access token from MSAL using Interactive Request flow authentication.
+     */
+    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingInteractiveRequest() throws MalformedURLException {
+        IAccount account = this.getIAccount();
+        if (account == null)
+            return this.app.acquireToken(InteractiveRequestParameters.builder(new URI("http://localhost")).scopes(this.scopes).build());
         else return this.app.acquireTokenSilently(SilentParameters.builder(this.scopes, account).build());
     }
 
@@ -316,43 +431,120 @@ public class MsaAuthenticationService extends AuthenticationService {
         assert response != null;
         this.selectedProfile = new GameProfile(response.id, response.name);
         this.profiles = Collections.singletonList(this.selectedProfile);
-        this.username = response.name;
+        this.minecraftUsername = response.name;
     }
 
     @Override
     public void login() throws RequestException {
+        login(AuthenticationFlow.NOT_SPECIFIED, false);
+    }
+
+    public void login(AuthenticationFlow authFlow, boolean forceReauth) throws RequestException {
+        if (forceReauth && authFlow == AuthenticationFlow.REFRESH_TOKEN) {
+            throw new InvalidParameterException("REFRESH_TOKEN authentication cannot be used when forcing re-authentication");
+        }
+        
+        // Use a refresh token if one is present and re-authorization is not being forced
+        if (!forceReauth && this.msaUsername != null && !this.msaUsername.isEmpty()) {
+            IAccount account = this.getIAccount();
+            if (account != null) {
+                authFlow = AuthenticationFlow.REFRESH_TOKEN;
+            }
+        }
+
+        if (authFlow == AuthenticationFlow.NOT_SPECIFIED) {
+            if (deviceCodeConsumer != null) {
+                authFlow = AuthenticationFlow.DEVICE_CODE_FLOW;
+            } else if (this.msaUsername != null && !this.msaUsername.isEmpty() &&
+                this.msaPassword != null && !this.msaPassword.isEmpty()) {
+                authFlow = AuthenticationFlow.USERNAME_PASSWORD;
+            } else {
+                authFlow = AuthenticationFlow.INTERACTIVE_FLOW;
+            }
+        }
+
+        McLoginResponse response;
+        switch (authFlow) {
+            case REFRESH_TOKEN:
+                response = loginWithRefreshToken();
+                break;
+            case USERNAME_PASSWORD:
+                response = loginWithUsernamePassword();
+                break;
+            case INTERACTIVE_FLOW:
+                response = loginUsingInteractiveFlow();
+                break;
+            case DEVICE_CODE_FLOW:
+                response = loginUsingDeviceCodeFlow();
+                break;
+            default:
+                throw new IllegalStateException("Unexpected authFlow value");
+        }
+
+        if (response == null)
+            throw new RequestException("Invalid response received.");
+        
+        this.accessToken = response.access_token;
+
+        // Get the profile to complete the login process
+        this.getProfile();
+
+        this.loggedIn = true;
+    }
+
+    private boolean msaUsernameSet() throws RequestException {
+        // Complain if the username is not set
+        if (this.msaUsername == null || this.msaUsername.isEmpty()) {
+            throw new InvalidCredentialsException("Invalid username.");
+        }
+    }
+
+    private boolean checkMsaUsername() throws RequestException {
+        if (!msaUsernameSet()) {
+            throw new InvalidCredentialsException("Invalid username.");
+        }
+    }
+
+    private McLoginResponse loginWithUsernamePassword() throws RequestException {
+        checkMsaUsername();
+
+        // Always use the official client ID for username / password
+        this.clientId = MINECRAFT_CLIENT_ID;
+        
+        return this.getLoginResponseFromCreds();
+    }
+
+    private McLoginResponse loginWithRefreshToken() throws RequestException {
+        checkMsaUsername();
+        return this.getLoginResponseFromRefreshToken();
+    }
+
+    private McLoginResponse loginUsingInteractiveFlow() throws RequestException {
         try {
-            boolean password = this.password != null && !this.password.isEmpty();
-            boolean refresh = this.refreshToken != null && !this.refreshToken.isEmpty();
-
-            // Complain if the username is not set
-            if (this.username == null || this.username.isEmpty())
-                throw new InvalidCredentialsException("Invalid username.");
-
-            // Fix client ID if a password is set
-            if (password)
-                this.clientId = MINECRAFT_CLIENT_ID;
-
-            McLoginResponse response = refresh ? this.getLoginResponseFromRefreshToken()
-                    : password ? this.getLoginResponseFromCreds()
-                    : this.getLoginResponseFromToken("d=".concat(this.getMsalAccessToken().get().accessToken()));
-
-            if (response == null)
-                throw new RequestException("Invalid response received.");
-            this.accessToken = response.access_token;
-
-            // Get the profile to complete the login process
-            this.getProfile();
-
-            this.loggedIn = true;
-        } catch (MalformedURLException | ExecutionException | InterruptedException ex) {
+            return this.getLoginResponseFromToken("d=".concat(this.getMsalAccessTokenUsingInteractiveRequest().get().accessToken()));
+        } catch (MalformedURLException | InterruptedException | ExecutionException ex) {
             throw new RequestException(ex);
         }
     }
 
-    @Override
-    public void logout() throws RequestException {
-        super.logout();
+    private McLoginResponse loginUsingDeviceCodeFlow() throws RequestException {
+        try {
+            return this.getLoginResponseFromToken("d=".concat(this.getMsalAccessTokenUsingDeviceCode().get().accessToken()));
+        } catch (MalformedURLException | InterruptedException | ExecutionException ex) {
+            throw new RequestException(ex);
+        }
+    }
+
+    public void logout() {
+        if(!this.loggedIn) {
+            throw new IllegalStateException("Cannot log out while not logged in.");
+        }
+
+        this.accessToken = null;
+        this.loggedIn = false;
+        this.properties.clear();
+        this.profiles.clear();
+        this.selectedProfile = null;
         this.clientId = null;
     }
 
@@ -362,8 +554,9 @@ public class MsaAuthenticationService extends AuthenticationService {
                 "clientId='" + this.clientId + '\'' +
                 ", accessToken='" + this.accessToken + '\'' +
                 ", loggedIn=" + this.loggedIn +
-                ", username='" + this.username + '\'' +
-                ", password='" + this.password + '\'' +
+                ", msaUsername='" + this.msaUsername + '\'' +
+                ", minecraftUsername='" + this.minecraftUsername + '\'' +
+                ", password='" + this.msaPassword + '\'' +
                 ", selectedProfile=" + this.selectedProfile +
                 ", properties=" + this.properties +
                 ", profiles=" + this.profiles +

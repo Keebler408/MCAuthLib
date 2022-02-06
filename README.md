@@ -6,12 +6,11 @@ See [example/com/github/steveice10/mc/auth/test/MinecraftAuthTest.java](https://
 
 ## Authentication Types
 
-Visit [wiki.vg](https://wiki.vg/) for documentation on [Mojang API authentication](https://wiki.vg/Authentication) and [Microsoft's API authentication](https://wiki.vg/Microsoft_Authentication_Scheme).
+Visit [wiki.vg](https://wiki.vg/) for documentation on [Microsoft's API authentication](https://wiki.vg/Microsoft_Authentication_Scheme).
 
-| `AuthenticationService` | Usage |
-| :---: | --- |
-| `MojangAuthenticationService` | Used for authenticating Mojang accounts.<br>Supports regular Mojang accounts (email) and legacy accounts (username). |
-| `MsaAuthenticationService` | Used for authenticating Microsoft accounts.<br>Device Code auth uses the [Microsoft Authentication Library (MSAL) for Java](https://github.com/AzureAD/microsoft-authentication-library-for-java). <br>Username/password auth uses a custom implementation using a combination of Microsoft, Mojang, and Xbox API's. |
+The `MsaAuthenticationService` class supports the following Microsoft account authentication types:
+- **Device Code**. Uses the [Microsoft Authentication Library (MSAL) for Java](https://github.com/AzureAD/microsoft-authentication-library-for-java).
+- **Username/password**. Uses a custom implementation that combines Microsoft and Xbox API's.
 
 ## Building the Source
 MCAuthLib uses Maven to manage dependencies. Simply run 'mvn clean install' in the source's directory.
