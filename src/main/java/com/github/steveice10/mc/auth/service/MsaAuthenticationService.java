@@ -13,10 +13,10 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.rmi.UnexpectedException;
 import java.security.InvalidParameterException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -66,7 +66,6 @@ public class MsaAuthenticationService extends Service {
     private final PublicClientApplication app;
 
     private String clientId;
-    private String refreshToken;
     private Consumer<DeviceCode> deviceCodeConsumer;
 
     /**
@@ -91,7 +90,7 @@ public class MsaAuthenticationService extends Service {
     }
 
     /**
-     * Create a new {@link AuthenticationService} for Microsoft accounts with a custom MSAL {@link PublicClientApplication}.
+     * Create a new {@link MsaAuthenticationService} for Microsoft accounts with a custom MSAL {@link PublicClientApplication}.
      * <p>
      * This constructor is most useful if you need more granular control over the MSAL client on top of the provided
      * configurable options. Please note that the {@link PublicClientApplication} must be configured with the same client
@@ -313,7 +312,6 @@ public class MsaAuthenticationService extends Service {
         MsTokenRequest request = new MsTokenRequest(clientId, code);
         MsTokenResponse response = HTTP.makeRequestForm(this.getProxy(), MS_TOKEN_ENDPOINT, request.toMap(), MsTokenResponse.class);
         assert response != null;
-        this.refreshToken = response.refresh_token;
         return this.getLoginResponseFromToken(response.access_token);
     }
 
@@ -327,24 +325,6 @@ public class MsaAuthenticationService extends Service {
         }
 
         return textBuilder.toString();
-    }
-
-    /**
-     * Refreshes the access token and refresh token for further use
-     *
-     * @return The response containing the refresh token, so the user can store it for later use.
-     */
-    public MsTokenResponse refreshToken() throws RequestException {
-        if (this.refreshToken == null || this.refreshToken.isEmpty())
-            throw new InvalidCredentialsException("Invalid refresh token.");
-
-        MsTokenResponse response = HTTP.makeRequestForm(this.getProxy(), MS_TOKEN_ENDPOINT, new MsRefreshRequest(clientId, refreshToken).toMap(), MsTokenResponse.class);
-
-        assert response != null;
-        accessToken = response.access_token;
-        refreshToken = response.refresh_token;
-
-        return response;
     }
 
     /**
@@ -365,27 +345,28 @@ public class MsaAuthenticationService extends Service {
         if (this.deviceCodeConsumer == null)
             throw new IllegalStateException("Device code consumer is not set.");
 
-        IAccount account = this.getIAccount();
-        if (account == null)
-            return this.app.acquireToken(DeviceCodeFlowParameters.builder(this.scopes, this.deviceCodeConsumer).build());
-        else return this.app.acquireTokenSilently(SilentParameters.builder(this.scopes, account).build());
+        return this.app.acquireToken(DeviceCodeFlowParameters.builder(this.scopes, this.deviceCodeConsumer).build());
     }
 
     /**
      * Get an access token from MSAL using Interactive Request flow authentication.
+     * @throws URISyntaxException
      */
-    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingInteractiveRequest() throws MalformedURLException {
-        IAccount account = this.getIAccount();
-        if (account == null)
-            return this.app.acquireToken(InteractiveRequestParameters.builder(new URI("http://localhost")).scopes(this.scopes).build());
-        else return this.app.acquireTokenSilently(SilentParameters.builder(this.scopes, account).build());
+    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingInteractiveRequest() throws MalformedURLException, URISyntaxException {
+        return this.app.acquireToken(InteractiveRequestParameters.builder(new URI("http://localhost")).scopes(this.scopes).build());
     }
 
     /**
-     * Attempt to sign in using an existing refresh token set by {@link #setRefreshToken(String)}
+     * Attempt to sign in using an existing account
+     * @throws MalformedURLException
      */
-    private McLoginResponse getLoginResponseFromRefreshToken() throws RequestException {
-        return this.getLoginResponseFromToken("d=".concat(this.refreshToken().access_token));
+    private CompletableFuture<IAuthenticationResult> getMsalAccessTokenUsingRefreshToken() throws RequestException, MalformedURLException {
+        IAccount account = getIAccount();
+        if (account == null) {
+            throw new RequestException("Account not found in cache:" + this.msaUsername);
+        }
+
+        return this.app.acquireTokenSilently(SilentParameters.builder(this.scopes, account).build());
     }
 
     /**
@@ -434,7 +415,6 @@ public class MsaAuthenticationService extends Service {
         this.minecraftUsername = response.name;
     }
 
-    @Override
     public void login() throws RequestException {
         login(AuthenticationFlow.NOT_SPECIFIED, false);
     }
@@ -494,12 +474,10 @@ public class MsaAuthenticationService extends Service {
 
     private boolean msaUsernameSet() throws RequestException {
         // Complain if the username is not set
-        if (this.msaUsername == null || this.msaUsername.isEmpty()) {
-            throw new InvalidCredentialsException("Invalid username.");
-        }
+        return this.msaUsername != null && !this.msaUsername.isEmpty();
     }
 
-    private boolean checkMsaUsername() throws RequestException {
+    private void checkMsaUsername() throws RequestException {
         if (!msaUsernameSet()) {
             throw new InvalidCredentialsException("Invalid username.");
         }
@@ -515,14 +493,18 @@ public class MsaAuthenticationService extends Service {
     }
 
     private McLoginResponse loginWithRefreshToken() throws RequestException {
-        checkMsaUsername();
-        return this.getLoginResponseFromRefreshToken();
+        try {
+            checkMsaUsername();
+            return this.getLoginResponseFromToken("d=".concat(this.getMsalAccessTokenUsingRefreshToken().get().accessToken()));
+        } catch (MalformedURLException | InterruptedException | ExecutionException ex) {
+            throw new RequestException(ex);
+        }
     }
 
     private McLoginResponse loginUsingInteractiveFlow() throws RequestException {
         try {
             return this.getLoginResponseFromToken("d=".concat(this.getMsalAccessTokenUsingInteractiveRequest().get().accessToken()));
-        } catch (MalformedURLException | InterruptedException | ExecutionException ex) {
+        } catch (URISyntaxException | MalformedURLException | InterruptedException | ExecutionException ex) {
             throw new RequestException(ex);
         }
     }
