@@ -26,14 +26,11 @@ import java.util.regex.Pattern;
 
 public class MsaAuthenticationService extends Service {
     public enum AuthenticationFlow {
-
         NOT_SPECIFIED,
         USERNAME_PASSWORD,
         DEVICE_CODE_FLOW,
         REFRESH_TOKEN,
         INTERACTIVE_FLOW
-        // AUTHORIZATION_CODE(831),
-        //ACQUIRE_TOKEN_SILENTLY
     }
 
     protected String accessToken;
